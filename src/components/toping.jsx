@@ -14,6 +14,7 @@ const topings = [
     {
         topingN: '초코',
         price: 700,
+
     },
 
 ]
