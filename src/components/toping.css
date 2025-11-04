@@ -1,0 +1,97 @@
+header {
+    height: 100px;
+    width: 100%;
+    background-color: white;
+    position: fixed;
+    top: 0;
+    display: flex;
+    align-items: center;
+    justify-content: end;
+    padding-right: 36.95px;
+    box-sizing: border-box;
+}
+
+.title {
+    font-size: 21px;
+}
+
+
+section {
+    width: 95%;
+    margin: auto;
+    margin-top: 10px;
+    padding: 10px;
+    border-radius: 20px;
+    background-color: white;
+    border: 1px solid rgb(209, 216, 222);
+}
+
+section button {
+    border-radius: 50%;
+    width: 30px;
+    height: 30px;
+}
+
+.buttonD {
+    display: flex;
+    align-items: center;
+}
+
+.menuT div {
+    display: flex;
+}
+
+.menuT>div {
+    justify-content: space-between;
+}
+
+
+header>.title {
+    margin: auto !important;
+}
+
+article {
+    margin-top: 110px;
+}
+
+footer {
+    background-color: white;
+    height: 150px;
+    width: 100%;
+    position: fixed;
+    bottom: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    border-radius: 20px 20px 0 0;
+}
+
+
+footer>button {
+    background-color: blue;
+    color: white;
+    width: 95%;
+    height: 80%;
+    border-radius: 20px;
+    font-size: x-large;
+    font-family: 'Pretendard';
+    font-weight: 600;
+    border: 0;
+
+}
+
+
+
+
+
+.menuN {
+    display: flex;
+    align-items: center;
+}
+
+.drinkImg {
+    width: 150px;
+    height: 150px;
+    background-color: gray;
+    border-radius: 20px;
+}
