@@ -1,5 +1,7 @@
 import './App.css';
 import Main from './components/main'
+import React, { useEffect } from 'react';
+
 function App() {
     useEffect(() => {
     function openFullscreen() {
