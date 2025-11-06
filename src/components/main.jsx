@@ -41,12 +41,12 @@ export default function Main() {
       <section className="order-details">
 
         <div className="order-header">
-          <div className="order-shop-img"><img src={shopimg} /></div>
+          <div className="order-shop-img"><img src={shopimg} alt="shoping img"/></div>
           <p>주문내역</p>
         </div>
 
         <div className="order-main">
-        <div className="order-shop-img2"><img src={shopimg} /></div>
+        <div className="order-shop-img2"><img src={shopimg} alt="shoping img2"/></div>
           <p>주문할 상품을 선택해주세요</p>
           <div className="order-footer-line"></div>
         </div>

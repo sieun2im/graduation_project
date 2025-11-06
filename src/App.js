@@ -1,5 +1,4 @@
 import './App.css';
-import Toping from './components/toping';
 import Main from './components/main'
 function App() {
   return (
