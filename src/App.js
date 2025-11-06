@@ -1,13 +1,10 @@
-import logo from './logo.svg';
 import './App.css';
 import Toping from './components/toping';
-
+import Main from './components/main'
 function App() {
   return (
-    <div className="App">
-      <Toping></Toping>
-      
-      <div></div>
+    <div className="app">
+      <Main/>
     </div>
   );
 }

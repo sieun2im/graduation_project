@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <!-- 컵 본체 -->
+  <path d="M18 28 L22 50 C22 52 24 54 26 54 L38 54 C40 54 42 52 42 50 L46 28 Z" fill="#8D6E63"/>
+  
+  <!-- 컵 윗부분 -->
+  <ellipse cx="32" cy="28" rx="14" ry="4" fill="#6D4C41"/>
+  
+  <!-- 커피 표면 -->
+  <ellipse cx="32" cy="28" rx="12" ry="3" fill="#5D4037"/>
+  
+  <!-- 손잡이 -->
+  <path d="M 46 32 Q 52 32 52 38 Q 52 44 46 44" stroke="#8D6E63" stroke-width="4" fill="none" stroke-linecap="round"/>
+  <path d="M 46 34 Q 50 34 50 38 Q 50 42 46 42" stroke="#A1887F" stroke-width="2" fill="none" stroke-linecap="round"/>
+  
+  <!-- 김 1 -->
+  <path d="M 26 18 Q 24 14 26 10" stroke="#B0BEC5" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.7"/>
+  
+  <!-- 김 2 -->
+  <path d="M 32 16 Q 30 12 32 8" stroke="#B0BEC5" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.7"/>
+  
+  <!-- 김 3 -->
+  <path d="M 38 18 Q 36 14 38 10" stroke="#B0BEC5" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.7"/>
+  
+  <!-- 하이라이트 -->
+  <ellipse cx="25" cy="36" rx="3" ry="6" fill="white" opacity="0.3"/>
+</svg>

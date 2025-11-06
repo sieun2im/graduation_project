@@ -132,7 +132,7 @@ table {
 
 
 
-@font-face {
+/* @font-face {
   font-family: 'Pretendard';
   src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/pretendard@1.0/Pretendard-Thin.woff2') format('woff2');
   font-display: swap;
@@ -152,4 +152,10 @@ p {
 
 .title {
   font-size: 21px;
+} */
+
+.app{
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
