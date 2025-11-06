@@ -1,4 +1,4 @@
-header {
+/* header {
     height: 100px;
     width: 100%;
     background-color: white;
@@ -9,14 +9,14 @@ header {
     justify-content: end;
     padding-right: 36.95px;
     box-sizing: border-box;
-}
+} */
 
 .title {
     font-size: 21px;
 }
 
 
-section {
+/* section {
     width: 95%;
     margin: auto;
     margin-top: 10px;
@@ -24,7 +24,7 @@ section {
     border-radius: 20px;
     background-color: white;
     border: 1px solid rgb(209, 216, 222);
-}
+} */
 
 section button {
     border-radius: 50%;
@@ -95,3 +95,26 @@ footer>button {
     background-color: gray;
     border-radius: 20px;
 }
+
+/* 
+@font-face {
+  font-family: 'Pretendard';
+  src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/pretendard@1.0/Pretendard-Thin.woff2') format('woff2');
+  font-display: swap;
+}
+
+body {
+  background-color: aliceblue;
+}
+
+p {
+  font-family: 'Pretendard';
+  font-weight: 600;
+  font-size: 18px;
+  margin: 15px;
+  color: rgb(41, 62, 81);
+}
+
+.title {
+  font-size: 21px;
+} */
