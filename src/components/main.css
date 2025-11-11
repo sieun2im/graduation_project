@@ -3,6 +3,7 @@
     min-height: 100vh;
     padding-bottom: 220px; /* 주문내역 영역과 동일하게 아래에 여백 */
     overflow-y: auto;
+    /* width:750px; */
 }
 .main-top-sec {
     display : flex;
@@ -16,11 +17,13 @@
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     font-size: 20px;
+    margin : 0px;
 }
 
 .top-sub-title {
     font-size : 14px;
     color : #717872;
+    margin : 0px;
     margin-bottom: 15px;
 }
 
@@ -116,7 +119,7 @@
     height : 200px;
     display : flex;
     flex-direction: column;
-    justify-content: center;
+    /* justify-content: center; */
     align-items: center;
 }
 
@@ -129,10 +132,13 @@
 
 .order-shop-img2 {
     width : 80px;
+    margin-top : 30px;
 }
+
 
 .order-text {
     color : rgb(118, 118, 247);
+    margin-top: 0;
 }
 
 .menu-name, .menu-price {
@@ -148,4 +154,16 @@
     background: linear-gradient(to right, #2563EB, #4F46E5);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
+}
+.order-history-total {
+    margin-top: 10px;
+}
+
+.order-footer-line {
+  width: 95%;          
+  height: 1px;         
+  background-color: rgb(214, 214, 214);
+    margin-bottom: 10px;
+    margin-top : 10px;
+
 }

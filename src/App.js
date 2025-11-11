@@ -1,32 +1,48 @@
-import './App.css';
-import Main from './components/main'
-import React, { useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
+import Main from './components/main';
+import Toping from './components/toping';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
 
 function App() {
-    useEffect(() => {
+  const [cart, setCart] = useState([]);
+
+  // 장바구니에 항목 추가 함수
+  const handleAddToCart = (item) => {
+    setCart(oldCart => {
+      const existsIndex = oldCart.findIndex(c => c.name === item.name && JSON.stringify(c.options) === JSON.stringify(item.options));
+      if (existsIndex !== -1) {
+        const newCart = [...oldCart];
+        newCart[existsIndex].count += item.count;
+        return newCart;
+      }
+      return [...oldCart, item];
+    });
+  };
+
+  useEffect(() => {
     function openFullscreen() {
       const elem = document.documentElement;
       if (elem.requestFullscreen) {
         elem.requestFullscreen();
-      } else if (elem.webkitRequestFullscreen) { // Safari
+      } else if (elem.webkitRequestFullscreen) {
         elem.webkitRequestFullscreen();
-      } else if (elem.msRequestFullscreen) { // IE11
+      } else if (elem.msRequestFullscreen) {
         elem.msRequestFullscreen();
       }
     }
-
-    // 화면 클릭할 때 전체화면 실행
     document.documentElement.addEventListener('click', openFullscreen);
-
-    // 컴포넌트 언마운트 시 이벤트 제거
     return () => {
       document.documentElement.removeEventListener('click', openFullscreen);
     };
   }, []);
+
   return (
-    <div className="app">
-      <Main/>
-    </div>
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<Main cart={cart} setCart={setCart} />} />
+        <Route path="/toping" element={<Toping handleAddToCart={handleAddToCart} />} />
+      </Routes>
+    </BrowserRouter>
   );
 }
 
