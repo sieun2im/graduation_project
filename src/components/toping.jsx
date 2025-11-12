@@ -56,7 +56,7 @@ const addToCartAndNavigate = () => {
     },
   };
   handleAddToCart(item);
-  navigate('/');
+  navigate('/main');
 };
 
   if (!menu) {
@@ -66,7 +66,7 @@ const addToCartAndNavigate = () => {
   return (
     <div className='mmaaiinn'>
       <header className='top-title-ct'>
-        <p onClick={() => navigate('/')}>{'<'}</p>
+        <p onClick={() => navigate('/main')}>{'<'}</p>
         <p className="option-select">옵션 선택</p>
       </header>
 

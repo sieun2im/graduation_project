@@ -72,6 +72,7 @@ p {
     gap : 30px;
     align-items: center;
     padding-left : 30px;
+    box-shadow: 0 1px 2px 0 rgba(0,0,0,0.05);
 }
 
 .top-title-ct > p {
@@ -79,6 +80,7 @@ p {
     background: linear-gradient(to right, #2563EB, #4F46E5);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
+    font-size : 20px;
 }
 .toping-contant-ct {
     width : 95%;
@@ -89,11 +91,13 @@ p {
     display : flex;
     align-items: center;
     gap : 20px;
-    
+    border-radius: 15px;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0,0.1);
 }
 
 .toping-menu-img {
     margin-left: 20px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0,0.1), 0 2px 4px -2px rgba(0, 0, 0,0.1);
 }
 
 .tp-menu-title-ct {
@@ -120,6 +124,7 @@ p {
     display : flex;
     flex-direction: column;
     border-radius: 20px;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0,0.1), 0 4px 6px -4px rgba(0,0,0,0.1);
     /* margin : 0px; */
 }
 
@@ -146,6 +151,7 @@ p {
     margin-left: 20px;
 
     color: color(srgb 0.3 0.3 265.64 / 1);
+    
 }    
 
 
@@ -153,6 +159,7 @@ p {
 
     
     color: color(srgb 0.3 0.3 265.64 / 1);
+    
 }
 
 .count-pm, .shot-pm, .cafe-pm, .banila-pm, .hazenuts-pm, .pearl-add {
@@ -170,6 +177,8 @@ p {
     display : flex;
     flex-direction: column;
     border-radius: 20px;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0,0.1), 0 4px 6px -4px rgba(0,0,0,0.1);
+
 }
 
 .syrup-total-ct {
@@ -329,10 +338,15 @@ input {
 
 .order-history-total, .qwer {
     width : 100%;
+    
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
 }
 
 .order-footer-history-ct {
     margin-bottom: 10px;
+    
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    
 }
 
 .order-footer-history-ct {
@@ -347,11 +361,15 @@ input {
     align-items: center;
     height : 40px;
     border-radius: 10px;
+    
+    
 }
 
 .ofhc {
     display : flex;
     flex-direction: column;
+    /* align-items: center; */
+    max-width : 700px;
     gap : 0px;
     margin-left: 10px;
 }
@@ -359,6 +377,13 @@ input {
 .ofhc > p {
     margin: 0px;
     font-size: 12px;
+}
+
+.dfd {
+    display : flex;
+    /* flex-direction: column; */
+    align-items: center;
+    gap : 20px;
 }
 .order-total-cont {
         width : 95%;
@@ -373,6 +398,13 @@ input {
     
     color : rgb(0, 94, 255);
     font-size : 10px;
+    
+}
+
+.aj {
+    margin: 0;
+    margin-left : 12px;
+    font-size: 12px;
 }
 
 .ddong {
@@ -421,6 +453,7 @@ input {
     border-radius: 5px;
     align-items: center;
     justify-content: center;
+    
 }
 
 .order-main {
@@ -428,6 +461,7 @@ input {
   flex-direction: column;
   height: calc(100vh - 상단헤더높이); /* 필요에 따라 조정 */
   overflow: hidden;
+  
 }
 
 .order-history-container {
@@ -440,6 +474,7 @@ input {
   flex-shrink: 0;
   background-color: #FFF;
   padding: 10px 0;
+  
 }
 
 .order-history-container {
@@ -448,11 +483,13 @@ input {
   overflow-x: hidden;
   width: 100%; /* 추가 */
   min-width: 0; /* 추가 - 중요! */
+  
 }
 
 .order-history-total {
   width: 95%; /* 기존 설정 유지 */
   margin: 0 auto;
+  
 }
 
 .order-footer-history-ct {

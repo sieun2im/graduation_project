@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Main from './components/main';
 import Toping from './components/toping';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import Onboarding from './components/menuT';
 
 function App() {
   const [cart, setCart] = useState([]);
@@ -39,7 +40,8 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<Main cart={cart} setCart={setCart} />} />
+        <Route path="/" element={<Onboarding/>}/>
+        <Route path="/main" element={<Main cart={cart} setCart={setCart} />} />
         <Route path="/toping" element={<Toping handleAddToCart={handleAddToCart} />} />
       </Routes>
     </BrowserRouter>
