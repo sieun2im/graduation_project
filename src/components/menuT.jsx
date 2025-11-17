@@ -4,8 +4,10 @@ import { useEffect, useState, useRef } from 'react';
 import eulji from '../icons/eulji.png';
 import drinklogo from '../icons/beverage-emoji-style.svg';
 import springai from '../utils/springai';
+// ✅ 녹음한 "주문시작" 파일 import
+import orderStartAudio from '../audio/start.mp3';
 
-function Onboarding() {
+function Onboarding({ voiceMode, setVoiceMode }) {
   const navigate = useNavigate();
   const [port, setPort] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
@@ -14,33 +16,81 @@ function Onboarding() {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const isSpeakingRef = useRef(false);
   const voiceEnabledRef = useRef(false);
+  const voiceModeRef = useRef(voiceMode);
   const readerRef = useRef(null);
   const audioPlayerRef = useRef(null);
   
-  // ✅ 사용자 감지 여부 추적 (한 번만 감지)
   const [userDetected, setUserDetected] = useState(false);
   const userDetectedRef = useRef(false);
+
+  const API_BASE_URL = 'https://54-116-8-71.nip.io';
+
+  useEffect(() => {
+    voiceModeRef.current = voiceMode;
+    
+    if (!voiceMode) {
+      console.log('🔇 음성 모드 비활성화 - 음성 인식 중지');
+      stopVoiceRecording();
+    }
+  }, [voiceMode]);
 
   const handleOrderTypeClick = () => {
     navigate('/main');
   };
 
-  // 음성 활성화 함수
-  const enableVoice = () => {
+  const enableVoice = async () => {
     if (!voiceEnabledRef.current) {
-      const utterance = new SpeechSynthesisUtterance('');
-      window.speechSynthesis.speak(utterance);
-      setVoiceEnabled(true);
-      voiceEnabledRef.current = true;
-      console.log('✅ 음성 재생 권한 활성화 완료');
+      try {
+        console.log('🎤 마이크 권한 요청 시작');
+        
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        console.log('✅ 마이크 권한 획득 성공');
+        stream.getTracks().forEach(track => track.stop());
+        
+        const utterance = new SpeechSynthesisUtterance('');
+        window.speechSynthesis.speak(utterance);
+        
+        setVoiceEnabled(true);
+        voiceEnabledRef.current = true;
+        console.log('✅ 음성 및 마이크 권한 활성화 완료');
+        
+        setTimeout(() => {
+          enterFullscreen();
+        }, 500);
+        
+      } catch (error) {
+        console.error('❌ 마이크 권한 오류:', error);
+        
+        if (error.name === 'NotAllowedError') {
+          alert('마이크 권한이 거부되었습니다.\n브라우저 설정에서 마이크 권한을 허용해주세요.');
+        } else if (error.name === 'NotFoundError') {
+          alert('마이크를 찾을 수 없습니다.');
+        } else {
+          alert('마이크 접근 중 오류가 발생했습니다.\nHTTPS 연결인지 확인해주세요.');
+        }
+      }
     }
   };
 
-  // 환영 메시지 + springai 음성 인식 시작
+  const enterFullscreen = () => {
+    try {
+      const elem = document.documentElement;
+      if (elem.requestFullscreen) {
+        elem.requestFullscreen();
+      } else if (elem.webkitRequestFullscreen) {
+        elem.webkitRequestFullscreen();
+      } else if (elem.msRequestFullscreen) {
+        elem.msRequestFullscreen();
+      }
+      console.log('📺 전체화면 전환 완료');
+    } catch (error) {
+      console.error('전체화면 전환 오류:', error);
+    }
+  };
+
   const playWelcomeMessage = () => {
     console.log('=== playWelcomeMessage 호출됨 ===');
     
-    // ✅ 이미 감지된 경우 무시
     if (userDetectedRef.current) {
       console.log('[playWelcomeMessage] 이미 사용자 감지됨 - 중복 실행 차단');
       return;
@@ -56,7 +106,6 @@ function Onboarding() {
       return;
     }
 
-    // ✅ 사용자 감지 상태를 true로 설정 (더 이상 감지하지 않음)
     setUserDetected(true);
     userDetectedRef.current = true;
     console.log('✅ 사용자 최초 감지 - 추가 감지 비활성화');
@@ -65,102 +114,211 @@ function Onboarding() {
     setIsSpeaking(true);
     isSpeakingRef.current = true;
 
-    const messages = [
-      '안녕하세요! EU 음성 키오스크에 오신 것을 환영합니다.',
-      '포장 또는 매장을 말해주세요.'
-    ];
-
-    const utterance1 = new SpeechSynthesisUtterance(messages[0]);
-    utterance1.lang = 'ko-KR';
-    utterance1.rate = 0.95;
-    utterance1.pitch = 1.1;
-
-    const utterance2 = new SpeechSynthesisUtterance(messages[1]);
-    utterance2.lang = 'ko-KR';
-    utterance2.rate = 0.95;
-    utterance2.pitch = 1.0;
-
-    utterance1.onend = () => {
-      setTimeout(() => {
-        window.speechSynthesis.speak(utterance2);
-      }, 300);
+    // ✅ 녹음한 "주문시작" 파일 재생
+    const audio = new Audio(orderStartAudio);
+    audio.volume = 1.0;
+    
+    audio.onplay = () => {
+      console.log('🔊 "주문시작" 오디오 재생 시작');
     };
-
-    utterance2.onend = () => {
-      console.log('[utterance2] 음성 재생 종료');
+    
+    audio.onended = () => {
+      console.log('[audio] "주문시작" 음성 재생 종료');
+      
+      if (!voiceModeRef.current) {
+        console.log('🔇 음성 모드 비활성화됨 - 백엔드 호출 중단');
+        setIsSpeaking(false);
+        isSpeakingRef.current = false;
+        return;
+      }
+      
+      // ✅ 녹음 파일을 백엔드로 전송
+      sendPreRecordedVoiceToBackend();
+    };
+    
+    audio.onerror = (e) => {
+      console.error('[audio] 음성 재생 오류:', e);
       setIsSpeaking(false);
       isSpeakingRef.current = false;
-
-      // 음성 안내 종료 후 음성 인식 시작
-      startMicRecording();
+      
+      // 오류 시 바로 마이크 시작
+      if (voiceModeRef.current) {
+        startMicRecording();
+      }
     };
 
-    utterance1.onerror = utterance2.onerror = (e) => {
-      console.error('[utterance] 음성 재생 오류:', e);
+    audio.play().catch(err => {
+      console.error('❌ 오디오 재생 실패:', err);
       setIsSpeaking(false);
       isSpeakingRef.current = false;
-    };
-
-    window.speechSynthesis.speak(utterance1);
+    });
   };
 
-  // springai 마이크 시작
+  // ✅ 녹음된 "주문시작" 파일을 백엔드로 전송
+const sendPreRecordedVoiceToBackend = async () => {
+  try {
+    console.log('📤 녹음된 "주문시작" 파일을 백엔드로 전송 중...');
+    
+    const response = await fetch(orderStartAudio);
+    const audioBlob = await response.blob();
+    
+    console.log('📊 원본 파일 크기:', audioBlob.size, 'bytes');
+    console.log('📊 원본 파일 타입:', audioBlob.type);
+    
+    // ✅ 파일 타입 명시적으로 설정
+    let fileToSend = audioBlob;
+    
+    // 파일 타입이 없거나 잘못된 경우 수정
+    if (!audioBlob.type || audioBlob.type === '' || !audioBlob.type.includes('audio')) {
+      console.warn('⚠️ 파일 타입이 없거나 잘못됨, audio/mpeg로 변환');
+      fileToSend = new Blob([audioBlob], { type: 'audio/mpeg' });
+      console.log('📊 변환된 타입:', fileToSend.type);
+    }
+    
+    // ✅ File 객체로 변환 (더 명확한 파일 정보 제공)
+    const file = new File([fileToSend], 'order-start.mp3', { 
+      type: 'audio/mpeg',
+      lastModified: Date.now()
+    });
+    
+    console.log('📊 전송할 파일 정보:');
+    console.log('  - 이름:', file.name);
+    console.log('  - 크기:', file.size, 'bytes');
+    console.log('  - 타입:', file.type);
+    console.log('  - 수정일:', new Date(file.lastModified).toLocaleString());
+
+    const formData = new FormData();
+    // ✅ File 객체로 전송
+    formData.append('question', file);
+
+    console.log('📤 백엔드로 전송 중...');
+    const backendResponse = await fetch(`${API_BASE_URL}/api/ai/chat-voice`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!backendResponse.ok) {
+      const errorText = await backendResponse.text();
+      console.error('백엔드 에러 응답:', errorText);
+      throw new Error(`백엔드 응답 에러: ${backendResponse.status}`);
+    }
+
+    console.log('✅ 백엔드 응답 수신');
+    console.log('응답 Content-Type:', backendResponse.headers.get('content-type'));
+
+    const audioPlayer = audioPlayerRef.current;
+    
+    audioPlayer.addEventListener('ended', () => {
+      console.log('🔊 백엔드 AI 음성 재생 완료');
+      setIsSpeaking(false);
+      isSpeakingRef.current = false;
+
+      if (voiceModeRef.current) {
+        startMicRecording();
+      }
+    }, { once: true });
+
+    await springai.voice.playAudioFormStreamingData(backendResponse, audioPlayer);
+
+  } catch (error) {
+    console.error('❌ 초기 음성 전송 오류:', error);
+    setIsSpeaking(false);
+    isSpeakingRef.current = false;
+    
+    if (voiceModeRef.current) {
+      startMicRecording();
+    }
+  }
+};
+
   const startMicRecording = () => {
     if (!springai || !springai.voice) {
       console.error('❌ springai.js가 로드되지 않았습니다.');
       return;
     }
+    
+    if (!voiceModeRef.current) {
+      console.log('🔇 음성 모드 비활성화 - 마이크 시작 중단');
+      return;
+    }
+    
     console.log('🎤 음성 인식 마이크 시작');
     springai.voice.initMic(handleVoice);
     springai.voice.controlSpeakerAnimation('user-speaker', true);
   };
 
-  // 사용자 음성 mp3Blob 받는 콜백
+  const stopVoiceRecording = () => {
+    if (springai && springai.voice) {
+      if (springai.voice.mediaRecorder && springai.voice.mediaRecorder.state === 'recording') {
+        springai.voice.mediaRecorder.stop();
+      }
+      if (springai.voice.recognition) {
+        springai.voice.recognition.stop();
+      }
+      springai.voice.controlSpeakerAnimation('user-speaker', false);
+      springai.voice.controlSpeakerAnimation('ai-speaker', false);
+    }
+    window.speechSynthesis.cancel();
+  };
+
   const handleVoice = async (mp3Blob) => {
     springai.voice.controlSpeakerAnimation('user-speaker', false);
     console.log('🎤 사용자 음성 수신:', mp3Blob);
+    console.log('📊 파일 크기:', mp3Blob.size, 'bytes');
 
-    // 음성 재생 중으로 설정
+    if (!voiceModeRef.current) {
+      console.log('🔇 음성 모드 비활성화 - 음성 처리 중단');
+      return;
+    }
+
+    if (mp3Blob.size < 5000) {
+      console.warn('⚠️ 음성이 너무 짧습니다. 다시 말씀해주세요.');
+      setTimeout(() => {
+        if (voiceModeRef.current) {
+          startMicRecording();
+        }
+      }, 1000);
+      return;
+    }
+
     setIsSpeaking(true);
     isSpeakingRef.current = true;
 
     try {
       const formData = new FormData();
-      formData.append('question', mp3Blob, 'speech.mp3');
+      formData.append('question', mp3Blob, 'user-speech.mp3');
 
       console.log('📤 백엔드로 음성 전송 중...');
-      const response = await fetch('/ai/chat-voice-one-model', {
+      const response = await fetch(`${API_BASE_URL}/api/ai/chat-voice`, {
         method: 'POST',
-        headers: { Accept: 'application/octet-stream' },
         body: formData,
       });
 
       if (!response.ok) {
+        const errorText = await response.text();
+        console.error('백엔드 에러 응답:', errorText);
         throw new Error(`백엔드 응답 에러: ${response.status}`);
       }
 
       console.log('✅ 백엔드 응답 수신');
       
-      // AI 스피커 애니메이션 시작
       springai.voice.controlSpeakerAnimation('ai-speaker', true);
 
-      // 오디오 플레이어 가져오기
       const audioPlayer = audioPlayerRef.current;
       
-      // 응답 음성 재생 완료 후 처리
       audioPlayer.addEventListener('ended', () => {
         console.log('🔊 AI 응답 음성 재생 완료');
         springai.voice.controlSpeakerAnimation('ai-speaker', false);
         setIsSpeaking(false);
         isSpeakingRef.current = false;
 
-        // 메인 화면으로 이동
-        setTimeout(() => {
-          navigate('/main');
-        }, 500);
+        if (voiceModeRef.current) {
+          setTimeout(() => {
+            startMicRecording();
+          }, 1000);
+        }
       }, { once: true });
 
-      // 스트리밍 응답 재생
       await springai.voice.playAudioFormStreamingData(response, audioPlayer);
 
     } catch (error) {
@@ -169,9 +327,7 @@ function Onboarding() {
       isSpeakingRef.current = false;
       springai.voice.controlSpeakerAnimation('ai-speaker', false);
       
-      // 에러 발생 시에도 메인으로 이동 (개발 중)
-      alert('음성 인식 오류가 발생했습니다. 메인 화면으로 이동합니다.');
-      navigate('/main');
+      alert('백엔드 서버와 통신 중 오류가 발생했습니다.');
     }
   };
 
@@ -239,13 +395,11 @@ function Onboarding() {
             if (data.toUpperCase().includes('USER_DETECT')) {
               console.log(`[readArduinoData] USER_DETECTED 신호 수신`);
               
-              // ✅ 이미 감지된 경우 무시
               if (userDetectedRef.current) {
                 console.log('[readArduinoData] 이미 사용자 감지됨 - 추가 감지 무시');
                 continue;
               }
               
-              // ✅ 음성 재생 중이거나 권한 없으면 무시
               if (!isSpeakingRef.current && voiceEnabledRef.current) {
                 playWelcomeMessage();
               } else {
@@ -283,17 +437,15 @@ function Onboarding() {
 
     autoConnect();
 
-    // ✅ 컴포넌트 언마운트 시 정리 (다시 돌아오면 상태 리셋됨)
     return () => {
+      stopVoiceRecording();
       if (readerRef.current) readerRef.current.cancel().catch(console.error);
       if (port) port.close().catch(console.error);
-      console.log('🔄 Onboarding 언마운트 - 감지 상태 리셋 준비');
     };
   }, []);
 
   return (
     <div className="mmaaiinn">
-      {/* 음성 활성화 버튼 */}
       {!voiceEnabled && (
         <div style={{
           position: 'fixed',
@@ -312,6 +464,7 @@ function Onboarding() {
             시작하려면 아래 버튼을 클릭하세요
           </p>
           <button 
+            className="voice-activation-btn"
             onClick={enableVoice}
             style={{
               background: '#4CAF50',
@@ -339,21 +492,24 @@ function Onboarding() {
                 ✓ 사용자 감지됨
               </span>
             )}
-            <button className="disconnect-btn" onClick={disconnectArduino} style={{marginLeft: '10px'}}>
+            {!voiceMode && (
+              <span style={{marginLeft: '10px', color: '#FF9800', fontSize: '14px'}}>
+                🖐️ 터치 모드
+              </span>
+            )}
+            <button className="disconnect-btn arduino-btn" onClick={disconnectArduino} style={{marginLeft: '10px'}}>
               🔌 연결 해제
             </button>
           </div>
         ) : (
-          <button className="connect-btn" onClick={connectArduino}>
+          <button className="connect-btn arduino-btn" onClick={connectArduino}>
             🔌 아두이노 수동 연결
           </button>
         )}
       </div>
 
-      {/* 음성 재생용 audio 태그 */}
       <audio ref={audioPlayerRef} style={{ display: 'none' }} />
 
-      {/* springai 음성 스피커 애니메이션용 요소 (숨김) */}
       <div style={{ display: 'none' }}>
         <div id="user-speaker"></div>
         <div id="ai-speaker"></div>

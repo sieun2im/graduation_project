@@ -29,17 +29,26 @@ const drinks = [
   { name: '캐모마일 티', price: 3000, img: kamomaeil, type: 'tea' }
 ];
 
-export default function Main({ cart, setCart }) {
+export default function Main({ cart, setCart, voiceMode }) {
   const navigate = useNavigate();
   const [showModal, setShowModal] = useState(false);
   const [orderNumber, setOrderNumber] = useState(100);
   const [showDetails, setShowDetails] = useState(false);
   
-  // 음성 관련 상태
-  const [voiceActive, setVoiceActive] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const isSpeakingRef = useRef(false);
+  const voiceModeRef = useRef(voiceMode);
   const audioPlayerRef = useRef(null);
+  const conversationStartedRef = useRef(false);
+
+  useEffect(() => {
+    voiceModeRef.current = voiceMode;
+    
+    if (!voiceMode) {
+      console.log('🔇 Main - 음성 모드 비활성화');
+      stopVoiceRecording();
+    }
+  }, [voiceMode]);
 
   useEffect(() => {
     const savedOrderNumber = localStorage.getItem('orderNumber');
@@ -49,60 +58,107 @@ export default function Main({ cart, setCart }) {
       localStorage.setItem('orderNumber', '100');
     }
 
-    // 페이지 로드 시 음성 안내 시작
-    setTimeout(() => {
-      playMenuGuide();
-    }, 500);
-  }, []);
+    // ✅ 음성 모드이고 아직 대화 시작 안 했으면 백엔드와 대화 시작
+    if (voiceMode && !conversationStartedRef.current) {
+      conversationStartedRef.current = true;
+      setTimeout(() => {
+        startBackendConversation();
+      }, 500);
+    }
+  }, [voiceMode]);
 
-  // 메뉴 안내 음성
-  const playMenuGuide = () => {
+  // ✅ 백엔드와 음성 대화 시작
+  const startBackendConversation = async () => {
+    if (!voiceModeRef.current) {
+      console.log('🔇 음성 모드 아님 - 대화 시작 중단');
+      return;
+    }
+
     if (isSpeakingRef.current) return;
     
     setIsSpeaking(true);
     isSpeakingRef.current = true;
 
-    const guideText = '원하시는 메뉴를 선택하시거나 음성으로 주문해주세요.';
-    const utterance = new SpeechSynthesisUtterance(guideText);
-    utterance.lang = 'ko-KR';
-    utterance.rate = 0.95;
+    try {
+      console.log('📤 백엔드에 Main 페이지 진입 알림');
+      const response = await fetch('/ai/chat-voice-main', {
+        method: 'POST',
+        headers: { Accept: 'application/octet-stream' },
+      });
 
-    utterance.onend = () => {
+      if (!response.ok) {
+        throw new Error(`백엔드 응답 에러: ${response.status}`);
+      }
+
+      console.log('✅ 백엔드 응답 수신');
+
+      const audioPlayer = audioPlayerRef.current;
+      
+      audioPlayer.addEventListener('ended', () => {
+        console.log('🔊 백엔드 AI 음성 재생 완료');
+        setIsSpeaking(false);
+        isSpeakingRef.current = false;
+
+        if (voiceModeRef.current) {
+          startMicRecording();
+        }
+      }, { once: true });
+
+      await springai.voice.playAudioFormStreamingData(response, audioPlayer);
+
+    } catch (error) {
+      console.error('❌ 백엔드 통신 오류:', error);
       setIsSpeaking(false);
       isSpeakingRef.current = false;
-      
-      // 안내 후 음성 인식 시작
-      startVoiceOrder();
-    };
-
-    window.speechSynthesis.speak(utterance);
+    }
   };
 
-  // 음성 주문 시작
-  const startVoiceOrder = () => {
+  const startMicRecording = () => {
     if (!springai || !springai.voice) {
       console.error('❌ springai.js가 로드되지 않았습니다.');
       return;
     }
     
-    if (voiceActive) return; // 이미 활성화된 경우
+    if (!voiceModeRef.current) {
+      console.log('🔇 음성 모드 비활성화 - 마이크 시작 중단');
+      return;
+    }
     
-    console.log('🎤 음성 주문 시작');
-    setVoiceActive(true);
-    springai.voice.initMic(handleVoiceOrder);
+    console.log('🎤 음성 인식 마이크 시작');
+    springai.voice.initMic(handleVoice);
+    springai.voice.controlSpeakerAnimation('user-speaker', true);
   };
 
-  // 음성 주문 처리
-  const handleVoiceOrder = async (mp3Blob) => {
+  const stopVoiceRecording = () => {
+    if (springai && springai.voice) {
+      if (springai.voice.mediaRecorder && springai.voice.mediaRecorder.state === 'recording') {
+        springai.voice.mediaRecorder.stop();
+      }
+      if (springai.voice.recognition) {
+        springai.voice.recognition.stop();
+      }
+      springai.voice.controlSpeakerAnimation('user-speaker', false);
+      springai.voice.controlSpeakerAnimation('ai-speaker', false);
+    }
+    window.speechSynthesis.cancel();
+  };
+
+  const handleVoice = async (mp3Blob) => {
+    springai.voice.controlSpeakerAnimation('user-speaker', false);
     console.log('🎤 사용자 음성 수신:', mp3Blob);
-    
+
+    if (!voiceModeRef.current) {
+      console.log('🔇 음성 모드 비활성화 - 음성 처리 중단');
+      return;
+    }
+
     setIsSpeaking(true);
     isSpeakingRef.current = true;
-    setVoiceActive(false);
 
     try {
       const formData = new FormData();
       formData.append('question', mp3Blob, 'speech.mp3');
+      formData.append('page', 'main');
 
       console.log('📤 백엔드로 음성 전송 중...');
       const response = await fetch('/ai/chat-voice-one-model', {
@@ -116,18 +172,23 @@ export default function Main({ cart, setCart }) {
       }
 
       console.log('✅ 백엔드 응답 수신');
+      
+      springai.voice.controlSpeakerAnimation('ai-speaker', true);
 
       const audioPlayer = audioPlayerRef.current;
       
       audioPlayer.addEventListener('ended', () => {
         console.log('🔊 AI 응답 음성 재생 완료');
+        springai.voice.controlSpeakerAnimation('ai-speaker', false);
         setIsSpeaking(false);
         isSpeakingRef.current = false;
 
-        // 응답 완료 후 다시 음성 주문 대기
-        setTimeout(() => {
-          startVoiceOrder();
-        }, 1000);
+        // ✅ 음성 모드이면 계속 대화, 아니면 정지
+        if (voiceModeRef.current) {
+          setTimeout(() => {
+            startMicRecording();
+          }, 1000);
+        }
       }, { once: true });
 
       await springai.voice.playAudioFormStreamingData(response, audioPlayer);
@@ -136,24 +197,12 @@ export default function Main({ cart, setCart }) {
       console.error('❌ 음성 처리 중 에러:', error);
       setIsSpeaking(false);
       isSpeakingRef.current = false;
-      
-      // 에러 발생 시 다시 음성 주문 대기
-      setTimeout(() => {
-        startVoiceOrder();
-      }, 1000);
+      springai.voice.controlSpeakerAnimation('ai-speaker', false);
     }
   };
 
   const handleMenuClick = (menu) => {
-    // 음성 인식 중지
-    if (springai && springai.voice && springai.voice.mediaRecorder) {
-      springai.voice.mediaRecorder.stop();
-    }
-    if (springai && springai.voice && springai.voice.recognition) {
-      springai.voice.recognition.stop();
-    }
-    setVoiceActive(false);
-    
+    stopVoiceRecording();
     navigate('/toping', { state: { menu } });
   };
 
@@ -187,14 +236,7 @@ export default function Main({ cart, setCart }) {
   const handleOrderSubmit = () => {
     if (cart.length === 0) return;
     
-    // 음성 인식 중지
-    if (springai && springai.voice && springai.voice.mediaRecorder) {
-      springai.voice.mediaRecorder.stop();
-    }
-    if (springai && springai.voice && springai.voice.recognition) {
-      springai.voice.recognition.stop();
-    }
-    setVoiceActive(false);
+    stopVoiceRecording();
     
     const newOrderNumber = orderNumber + 1;
     setOrderNumber(newOrderNumber);
@@ -217,18 +259,29 @@ export default function Main({ cart, setCart }) {
     }
   };
 
+  useEffect(() => {
+    return () => {
+      stopVoiceRecording();
+    };
+  }, []);
+
   return (
     <div className={`mmaaiinn ${showModal ? 'blur-background' : ''}`}>
       {/* 음성 재생용 audio 태그 */}
       <audio ref={audioPlayerRef} style={{ display: 'none' }} />
+
+      {/* springai 음성 스피커 애니메이션용 요소 (숨김) */}
+      <div style={{ display: 'none' }}>
+        <div id="user-speaker"></div>
+        <div id="ai-speaker"></div>
+      </div>
 
       <section className="main-top-sec">
         <div className="top-img"><img src={drink} alt="음료" /></div>
         <p className="top-title">EU 키오스크</p>
         <p className="top-sub-title">원하시는 메뉴를 선택해주세요.</p>
         
-        {/* 음성 인식 상태 표시 */}
-        {voiceActive && (
+        {voiceMode && (
           <div style={{
             position: 'fixed',
             top: '20px',
@@ -241,7 +294,7 @@ export default function Main({ cart, setCart }) {
             zIndex: 1000,
             animation: 'pulse 1.5s infinite'
           }}>
-            🎤 음성 듣는 중...
+            🎤 음성 모드 활성
           </div>
         )}
         
