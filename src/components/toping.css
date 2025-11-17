@@ -459,7 +459,7 @@ input {
 .order-main {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 상단헤더높이); /* 필요에 따라 조정 */
+  /* height: calc(100vh); 필요에 따라 조정 */
   overflow: hidden;
   
 }
