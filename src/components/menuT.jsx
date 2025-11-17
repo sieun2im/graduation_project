@@ -442,6 +442,7 @@ const sendPreRecordedVoiceToBackend = async () => {
       if (readerRef.current) readerRef.current.cancel().catch(console.error);
       if (port) port.close().catch(console.error);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
