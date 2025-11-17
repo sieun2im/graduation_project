@@ -65,6 +65,7 @@ export default function Main({ cart, setCart, voiceMode }) {
         startBackendConversation();
       }, 500);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [voiceMode]);
 
   // ✅ 백엔드와 음성 대화 시작

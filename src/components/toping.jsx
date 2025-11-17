@@ -47,6 +47,7 @@ const Toping = ({ handleAddToCart, voiceMode }) => {
         startBackendConversation();
       }, 500);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [voiceMode]);
 
   const startBackendConversation = async () => {
