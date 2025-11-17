@@ -377,7 +377,9 @@ export default function Main({ cart, setCart, voiceMode }) {
                             className="ab" 
                             src={trash} 
                             style={{width: 30, height: 30, cursor: 'pointer'}} 
-                            onClick={() => handleDelete(idx)} 
+                            onClick={() => handleDelete(idx)
+                            } 
+                            alt="df"
                           />
                         </p>
                       </div>
