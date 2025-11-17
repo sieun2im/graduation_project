@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import drink from '../icons/beverage-emoji-style.svg';
 import americano from '../icons/americano.jpg';
@@ -13,6 +13,7 @@ import ujacha from '../icons/ujacha.jpg';
 import kamomaeil from '../icons/kamomaeil.jpg';
 import shopimg from '../icons/shop.svg';
 import trash from '../icons/trashcan.png';
+import springai from '../utils/springai';
 import './main.css';
 
 const drinks = [
@@ -31,8 +32,128 @@ const drinks = [
 export default function Main({ cart, setCart }) {
   const navigate = useNavigate();
   const [showModal, setShowModal] = useState(false);
+  const [orderNumber, setOrderNumber] = useState(100);
+  const [showDetails, setShowDetails] = useState(false);
+  
+  // 음성 관련 상태
+  const [voiceActive, setVoiceActive] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const isSpeakingRef = useRef(false);
+  const audioPlayerRef = useRef(null);
+
+  useEffect(() => {
+    const savedOrderNumber = localStorage.getItem('orderNumber');
+    if (savedOrderNumber) {
+      setOrderNumber(parseInt(savedOrderNumber));
+    } else {
+      localStorage.setItem('orderNumber', '100');
+    }
+
+    // 페이지 로드 시 음성 안내 시작
+    setTimeout(() => {
+      playMenuGuide();
+    }, 500);
+  }, []);
+
+  // 메뉴 안내 음성
+  const playMenuGuide = () => {
+    if (isSpeakingRef.current) return;
+    
+    setIsSpeaking(true);
+    isSpeakingRef.current = true;
+
+    const guideText = '원하시는 메뉴를 선택하시거나 음성으로 주문해주세요.';
+    const utterance = new SpeechSynthesisUtterance(guideText);
+    utterance.lang = 'ko-KR';
+    utterance.rate = 0.95;
+
+    utterance.onend = () => {
+      setIsSpeaking(false);
+      isSpeakingRef.current = false;
+      
+      // 안내 후 음성 인식 시작
+      startVoiceOrder();
+    };
+
+    window.speechSynthesis.speak(utterance);
+  };
+
+  // 음성 주문 시작
+  const startVoiceOrder = () => {
+    if (!springai || !springai.voice) {
+      console.error('❌ springai.js가 로드되지 않았습니다.');
+      return;
+    }
+    
+    if (voiceActive) return; // 이미 활성화된 경우
+    
+    console.log('🎤 음성 주문 시작');
+    setVoiceActive(true);
+    springai.voice.initMic(handleVoiceOrder);
+  };
+
+  // 음성 주문 처리
+  const handleVoiceOrder = async (mp3Blob) => {
+    console.log('🎤 사용자 음성 수신:', mp3Blob);
+    
+    setIsSpeaking(true);
+    isSpeakingRef.current = true;
+    setVoiceActive(false);
+
+    try {
+      const formData = new FormData();
+      formData.append('question', mp3Blob, 'speech.mp3');
+
+      console.log('📤 백엔드로 음성 전송 중...');
+      const response = await fetch('/ai/chat-voice-one-model', {
+        method: 'POST',
+        headers: { Accept: 'application/octet-stream' },
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error(`백엔드 응답 에러: ${response.status}`);
+      }
+
+      console.log('✅ 백엔드 응답 수신');
+
+      const audioPlayer = audioPlayerRef.current;
+      
+      audioPlayer.addEventListener('ended', () => {
+        console.log('🔊 AI 응답 음성 재생 완료');
+        setIsSpeaking(false);
+        isSpeakingRef.current = false;
+
+        // 응답 완료 후 다시 음성 주문 대기
+        setTimeout(() => {
+          startVoiceOrder();
+        }, 1000);
+      }, { once: true });
+
+      await springai.voice.playAudioFormStreamingData(response, audioPlayer);
+
+    } catch (error) {
+      console.error('❌ 음성 처리 중 에러:', error);
+      setIsSpeaking(false);
+      isSpeakingRef.current = false;
+      
+      // 에러 발생 시 다시 음성 주문 대기
+      setTimeout(() => {
+        startVoiceOrder();
+      }, 1000);
+    }
+  };
 
   const handleMenuClick = (menu) => {
+    // 음성 인식 중지
+    if (springai && springai.voice && springai.voice.mediaRecorder) {
+      springai.voice.mediaRecorder.stop();
+    }
+    if (springai && springai.voice && springai.voice.recognition) {
+      springai.voice.recognition.stop();
+    }
+    setVoiceActive(false);
+    
     navigate('/toping', { state: { menu } });
   };
 
@@ -40,69 +161,97 @@ export default function Main({ cart, setCart }) {
     setCart(oldCart => oldCart.filter((_, i) => i !== idx));
   };
 
-  // 옵션 상세 정보 생성 함수
-  const getOptionDetails = (options) => {
+  const getOptionSummary = (options) => {
     const details = [];
-    
-    if (options?.sizeUp?.selected) {
-      details.push('사이즈업');
-    }
-    if (options?.shot?.count > 0) {
-      details.push(`샷 추가 x${options.shot.count}`);
-    }
-    if (options?.syrupCafe?.count > 0) {
-      details.push(`카페 시럽 x${options.syrupCafe.count}`);
-    }
-    if (options?.syrupVanilla?.count > 0) {
-      details.push(`바닐라 시럽 x${options.syrupVanilla.count}`);
-    }
-    if (options?.syrupHazelnut?.count > 0) {
-      details.push(`헤이즐넛 시럽 x${options.syrupHazelnut.count}`);
-    }
-    if (options?.decaf?.selected) {
-      details.push('디카페인');
-    }
-    if (options?.pearl?.selected) {
-      details.push('펄 추가');
-    }
-    
+    if (options?.sizeUp?.selected) details.push('사이즈업');
+    if (options?.shot?.count > 0) details.push(`샷 x${options.shot.count}`);
+    if (options?.syrupCafe?.count > 0) details.push(`카페시럽 x${options.syrupCafe.count}`);
+    if (options?.syrupVanilla?.count > 0) details.push(`바닐라시럽 x${options.syrupVanilla.count}`);
+    if (options?.syrupHazelnut?.count > 0) details.push(`헤이즐넛시럽 x${options.syrupHazelnut.count}`);
+    if (options?.decaf?.selected) details.push('디카페인');
+    if (options?.pearl?.selected) details.push('펄');
     return details;
   };
 
-  // 주문 총 개수, 총 금액 계산
   const totalCount = cart.reduce((acc, item) => acc + item.count, 0);
   const totalPrice = cart.reduce((acc, item) => {
     const optionPrice = Object.values(item.options || {}).reduce((optAcc, opt) => {
-      if (typeof opt !== 'object' || opt === null) {
-        return optAcc;
-      }
-      if ('selected' in opt) {
-        return optAcc + (opt.selected ? (opt.price || 0) : 0);
-      }
-      if ('count' in opt) {
-        return optAcc + ((opt.price || 0) * (opt.count || 0));
-      }
+      if (typeof opt !== 'object' || opt === null) return optAcc;
+      if ('selected' in opt) return optAcc + (opt.selected ? (opt.price || 0) : 0);
+      if ('count' in opt) return optAcc + ((opt.price || 0) * (opt.count || 0));
       return optAcc;
     }, 0);
-    
     return acc + (item.price + optionPrice) * item.count;
   }, 0);
 
   const handleOrderSubmit = () => {
     if (cart.length === 0) return;
+    
+    // 음성 인식 중지
+    if (springai && springai.voice && springai.voice.mediaRecorder) {
+      springai.voice.mediaRecorder.stop();
+    }
+    if (springai && springai.voice && springai.voice.recognition) {
+      springai.voice.recognition.stop();
+    }
+    setVoiceActive(false);
+    
+    const newOrderNumber = orderNumber + 1;
+    setOrderNumber(newOrderNumber);
+    localStorage.setItem('orderNumber', newOrderNumber.toString());
+    
     setShowModal(true);
   };
 
   const closeModal = () => {
     setShowModal(false);
+    setShowDetails(false);
+  };
+
+  const resetOrderNumber = () => {
+    const confirm = window.confirm('주문번호를 100으로 초기화하시겠습니까?');
+    if (confirm) {
+      setOrderNumber(100);
+      localStorage.setItem('orderNumber', '100');
+      alert('주문번호가 100으로 초기화되었습니다.');
+    }
   };
 
   return (
     <div className={`mmaaiinn ${showModal ? 'blur-background' : ''}`}>
+      {/* 음성 재생용 audio 태그 */}
+      <audio ref={audioPlayerRef} style={{ display: 'none' }} />
+
       <section className="main-top-sec">
         <div className="top-img"><img src={drink} alt="음료" /></div>
         <p className="top-title">EU 키오스크</p>
         <p className="top-sub-title">원하시는 메뉴를 선택해주세요.</p>
+        
+        {/* 음성 인식 상태 표시 */}
+        {voiceActive && (
+          <div style={{
+            position: 'fixed',
+            top: '20px',
+            right: '20px',
+            background: '#4CAF50',
+            color: 'white',
+            padding: '10px 20px',
+            borderRadius: '20px',
+            fontSize: '16px',
+            zIndex: 1000,
+            animation: 'pulse 1.5s infinite'
+          }}>
+            🎤 음성 듣는 중...
+          </div>
+        )}
+        
+        <button 
+          className="reset-order-btn" 
+          onDoubleClick={resetOrderNumber}
+          title="더블클릭하여 주문번호 초기화"
+        >
+          주문번호 초기화
+        </button>
       </section>
 
       <div className="line"></div>
@@ -147,20 +296,14 @@ export default function Main({ cart, setCart }) {
               <div className="order-history-container">
                 {cart.map((item, idx) => {
                   const optionPrice = Object.values(item.options || {}).reduce((optAcc, opt) => {
-                    if (typeof opt !== 'object' || opt === null) {
-                      return optAcc;
-                    }
-                    if ('selected' in opt) {
-                      return optAcc + (opt.selected ? (opt.price || 0) : 0);
-                    }
-                    if ('count' in opt) {
-                      return optAcc + ((opt.price || 0) * (opt.count || 0));
-                    }
+                    if (typeof opt !== 'object' || opt === null) return optAcc;
+                    if ('selected' in opt) return optAcc + (opt.selected ? (opt.price || 0) : 0);
+                    if ('count' in opt) return optAcc + ((opt.price || 0) * (opt.count || 0));
                     return optAcc;
                   }, 0);
                   
                   const totalItemPrice = (item.price + optionPrice) * item.count;
-                  const optionDetails = getOptionDetails(item.options);
+                  const optionDetails = getOptionSummary(item.options);
                   
                   return (
                     <div key={idx} className="order-history-total">
@@ -205,123 +348,85 @@ export default function Main({ cart, setCart }) {
         </div>
       </section>
 
-      {/* 상세 주문 내역이 포함된 모달 */}
       {showModal && (
-        <div className="modal-overlay" onClick={closeModal}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header-section">
-              <h2>주문 확인</h2>
-              <button className="modal-close-x" onClick={closeModal}>✕</button>
+        <div className="order-complete-overlay">
+          <div className="order-complete-modal">
+            <div className="success-checkmark">
+              <div className="check-icon">
+                <span className="check-line check-tip"></span>
+                <span className="check-line check-long"></span>
+                <div className="check-circle"></div>
+              </div>
             </div>
-            
-            <div className="modal-order-list">
-              {cart.map((item, idx) => {
-                const optionPrice = Object.values(item.options || {}).reduce((optAcc, opt) => {
-                  if (typeof opt !== 'object' || opt === null) return optAcc;
-                  if ('selected' in opt) return optAcc + (opt.selected ? (opt.price || 0) : 0);
-                  if ('count' in opt) return optAcc + ((opt.price || 0) * (opt.count || 0));
-                  return optAcc;
-                }, 0);
-                const totalItemPrice = (item.price + optionPrice) * item.count;
-                const optionDetails = getOptionDetails(item.options);
-                
-                return (
-                  <div key={idx} className="modal-item-detail">
-                    <div className="modal-item-header">
-                      <div>
-                        <p className="modal-item-name">{item.name} <span className="modal-item-qty">x {item.count}</span></p>
-                        <p className="modal-item-base-price">기본 가격: &#8361;{item.price.toLocaleString()}</p>
+
+            <h2 className="complete-title">주문이 완료되었습니다!</h2>
+            <p className="order-number-text">
+              주문번호: <span className="order-number-highlight">{orderNumber}</span>
+            </p>
+
+            <div className="order-summary-section">
+              <h3 className="section-header">주문 내역</h3>
+              
+              <div className="order-items-container">
+                {cart.map((item, idx) => {
+                  const optionPrice = Object.values(item.options || {}).reduce((optAcc, opt) => {
+                    if (typeof opt !== 'object' || opt === null) return optAcc;
+                    if ('selected' in opt) return optAcc + (opt.selected ? (opt.price || 0) : 0);
+                    if ('count' in opt) return optAcc + ((opt.price || 0) * (opt.count || 0));
+                    return optAcc;
+                  }, 0);
+                  const totalItemPrice = (item.price + optionPrice) * item.count;
+                  
+                  const optionsList = [];
+                  if (item.options?.sizeUp?.selected) optionsList.push('사이즈업');
+                  if (item.options?.shot?.count > 0) optionsList.push(`샷 추가 x ${item.options.shot.count}`);
+                  if (item.options?.syrupCafe?.count > 0) optionsList.push(`카페 시럽 x ${item.options.syrupCafe.count}`);
+                  if (item.options?.syrupVanilla?.count > 0) optionsList.push(`바닐라 시럽 x ${item.options.syrupVanilla.count}`);
+                  if (item.options?.syrupHazelnut?.count > 0) optionsList.push(`헤이즐넛 시럽 x ${item.options.syrupHazelnut.count}`);
+                  if (item.options?.decaf?.selected) optionsList.push('디카페인');
+                  if (item.options?.pearl?.selected) optionsList.push('펄 추가');
+                  
+                  return (
+                    <div key={idx} className="order-item-wrapper">
+                      <div className="order-item-line">
+                        <span className="item-description">{item.name} × {item.count}</span>
+                        <span className="item-amount">₩{totalItemPrice.toLocaleString()}</span>
                       </div>
-                      <p className="modal-item-total">&#8361;{totalItemPrice.toLocaleString()}원</p>
-                    </div>
-                    
-                    {/* 옵션 상세 표시 */}
-                    {optionDetails.length > 0 && (
-                      <div className="modal-item-options">
-                        <p className="modal-options-title">선택 옵션:</p>
-                        <div className="modal-options-list">
-                          {item.options?.sizeUp?.selected && (
-                            <div className="modal-option-item">
-                              <span>• 사이즈업</span>
-                              <span>+&#8361;{item.options.sizeUp.price}</span>
-                            </div>
-                          )}
-                          {item.options?.shot?.count > 0 && (
-                            <div className="modal-option-item">
-                              <span>• 샷 추가 x{item.options.shot.count}</span>
-                              <span>+&#8361;{item.options.shot.count * item.options.shot.price}</span>
-                            </div>
-                          )}
-                          {item.options?.syrupCafe?.count > 0 && (
-                            <div className="modal-option-item">
-                              <span>• 카페 시럽 x{item.options.syrupCafe.count}</span>
-                              <span>+&#8361;{item.options.syrupCafe.count * item.options.syrupCafe.price}</span>
-                            </div>
-                          )}
-                          {item.options?.syrupVanilla?.count > 0 && (
-                            <div className="modal-option-item">
-                              <span>• 바닐라 시럽 x{item.options.syrupVanilla.count}</span>
-                              <span>+&#8361;{item.options.syrupVanilla.count * item.options.syrupVanilla.price}</span>
-                            </div>
-                          )}
-                          {item.options?.syrupHazelnut?.count > 0 && (
-                            <div className="modal-option-item">
-                              <span>• 헤이즐넛 시럽 x{item.options.syrupHazelnut.count}</span>
-                              <span>+&#8361;{item.options.syrupHazelnut.count * item.options.syrupHazelnut.price}</span>
-                            </div>
-                          )}
-                          {item.options?.decaf?.selected && (
-                            <div className="modal-option-item">
-                              <span>• 디카페인</span>
-                              <span>+&#8361;{item.options.decaf.price}</span>
-                            </div>
-                          )}
-                          {item.options?.pearl?.selected && (
-                            <div className="modal-option-item">
-                              <span>• 펄 추가</span>
-                              <span>+&#8361;{item.options.pearl.price}</span>
-                            </div>
-                          )}
-                          {item.type === 'coffee' && (
-                            <div className="modal-option-item">
-                              <span>• 온도/얼음: {item.options?.coffeeTemp} / {item.options?.coffeeIce}</span>
-                            </div>
-                          )}
-                          {item.type === 'tea' && (
-                            <div className="modal-option-item">
-                              <span>• 온도/얼음: {item.options?.teaTemp} / {item.options?.teaIce}</span>
-                            </div>
-                          )}
+                      
+                      {optionsList.length > 0 && (
+                        <div className="item-options-summary">
+                          {optionsList.join(', ')}
                         </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="total-payment-box">
+                <span className="total-label">총 결제금액</span>
+                <span className="total-value">₩{totalPrice.toLocaleString()}</span>
+              </div>
             </div>
-            
-            <div className="modal-divider"></div>
-            
-            <div className="modal-total">
-              <p>총 주문 수량</p>
-              <p className="modal-total-count">{totalCount}개</p>
+
+            <div className="notice-box">
+              <div className="notice-row">
+                <span className="notice-emoji">⏰</span>
+                <span className="notice-message">주문하신 음료는 5-10분 후에 준비됩니다.</span>
+              </div>
+              <div className="notice-row">
+                <span className="notice-emoji">⚠️</span>
+                <span className="notice-message">진동벨이 울리면 카운터에서 수령해주세요.</span>
+              </div>
             </div>
-            
-            <div className="modal-total modal-final-total">
-              <p>총 결제 금액</p>
-              <p className="modal-total-price">&#8361;{totalPrice.toLocaleString()}원</p>
-            </div>
-            
-            <div className="modal-buttons">
-              <button className="modal-cancel-btn" onClick={closeModal}>취소</button>
-              <button className="modal-confirm-btn" onClick={() => {
-                alert('주문이 완료되었습니다!');
-                setCart([]);
-                closeModal();
-              }}>
-                결제하기
-              </button>
-            </div>
+
+            <button className="new-order-button" onClick={() => {
+              setCart([]);
+              closeModal();
+              navigate('/');
+            }}>
+              ✨ 새 주문하기
+            </button>
           </div>
         </div>
       )}
