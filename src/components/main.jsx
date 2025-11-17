@@ -18,7 +18,7 @@ import './main.css';
 
 const drinks = [
   { name: '아메리카노', price: 1500, img: americano, type: 'coffee' },
-  { name: '바닐라 라뗴', price: 2500, img: vanlia, type: 'coffee' },
+  { name: '바닐라 라뗄', price: 2500, img: vanlia, type: 'coffee' },
   { name: '캐러멜 마키아토', price: 3000, img: cara, type: 'coffee' },
   { name: '복숭아 아이스티', price: 2000, img: icetea, type: 'tea' },
   { name: '레모네이드', price: 2000, img: lemonade, type: 'juice' },
@@ -33,13 +33,14 @@ export default function Main({ cart, setCart, voiceMode }) {
   const navigate = useNavigate();
   const [showModal, setShowModal] = useState(false);
   const [orderNumber, setOrderNumber] = useState(100);
-  const [_isShowDeatils, setShowDetails] = useState(false);
   
   const [_isSpeaking, setIsSpeaking] = useState(false);
   const isSpeakingRef = useRef(false);
   const voiceModeRef = useRef(voiceMode);
   const audioPlayerRef = useRef(null);
   const conversationStartedRef = useRef(false);
+
+  const API_BASE_URL = 'https://54-116-8-71.nip.io';
 
   useEffect(() => {
     voiceModeRef.current = voiceMode;
@@ -58,7 +59,6 @@ export default function Main({ cart, setCart, voiceMode }) {
       localStorage.setItem('orderNumber', '100');
     }
 
-    // ✅ 음성 모드이고 아직 대화 시작 안 했으면 백엔드와 대화 시작
     if (voiceMode && !conversationStartedRef.current) {
       conversationStartedRef.current = true;
       setTimeout(() => {
@@ -68,7 +68,6 @@ export default function Main({ cart, setCart, voiceMode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [voiceMode]);
 
-  // ✅ 백엔드와 음성 대화 시작
   const startBackendConversation = async () => {
     if (!voiceModeRef.current) {
       console.log('🔇 음성 모드 아님 - 대화 시작 중단');
@@ -82,7 +81,7 @@ export default function Main({ cart, setCart, voiceMode }) {
 
     try {
       console.log('📤 백엔드에 Main 페이지 진입 알림');
-      const response = await fetch('/ai/chat-voice-main', {
+      const response = await fetch(`${API_BASE_URL}/api/ai/chat-voice`, {
         method: 'POST',
         headers: { Accept: 'application/octet-stream' },
       });
@@ -162,7 +161,7 @@ export default function Main({ cart, setCart, voiceMode }) {
       formData.append('page', 'main');
 
       console.log('📤 백엔드로 음성 전송 중...');
-      const response = await fetch('/ai/chat-voice-one-model', {
+      const response = await fetch(`${API_BASE_URL}/api/ai/chat-voice`, {
         method: 'POST',
         headers: { Accept: 'application/octet-stream' },
         body: formData,
@@ -174,6 +173,10 @@ export default function Main({ cart, setCart, voiceMode }) {
 
       console.log('✅ 백엔드 응답 수신');
       
+      // ✅ 백엔드 헤더에서 주문 완료 신호 확인
+      const kioskStatus = response.headers.get('euKiosk');
+      console.log('📍 키오스크 상태:', kioskStatus);
+      
       springai.voice.controlSpeakerAnimation('ai-speaker', true);
 
       const audioPlayer = audioPlayerRef.current;
@@ -184,8 +187,25 @@ export default function Main({ cart, setCart, voiceMode }) {
         setIsSpeaking(false);
         isSpeakingRef.current = false;
 
-        // ✅ 음성 모드이면 계속 대화, 아니면 정지
-        if (voiceModeRef.current) {
+        // ✅ 주문 완료 신호 확인
+        if (kioskStatus === 'COMPLETED') {
+          console.log('🎉 주문 완료! 5초 후 Onboarding으로 이동합니다.');
+          
+          // 사용자에게 알림 표시
+          showCompletionMessage();
+          
+          // 5초 후 Onboarding으로 이동
+          setTimeout(() => {
+            console.log('🔄 Onboarding 화면으로 이동');
+            
+            // 장바구니 초기화
+            setCart([]);
+            
+            // Onboarding으로 이동
+            navigate('/');
+          }, 5000);
+        } else if (voiceModeRef.current) {
+          // 주문 계속 진행
           setTimeout(() => {
             startMicRecording();
           }, 1000);
@@ -200,6 +220,55 @@ export default function Main({ cart, setCart, voiceMode }) {
       isSpeakingRef.current = false;
       springai.voice.controlSpeakerAnimation('ai-speaker', false);
     }
+  };
+
+  // ✅ 주문 완료 메시지 표시
+  const showCompletionMessage = () => {
+    const messageDiv = document.createElement('div');
+    messageDiv.style.cssText = `
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(76, 175, 80, 0.95);
+      color: white;
+      padding: 30px 50px;
+      border-radius: 20px;
+      font-size: 24px;
+      font-weight: bold;
+      z-index: 100000;
+      text-align: center;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+      animation: fadeIn 0.5s;
+    `;
+    
+    let countdown = 5;
+    messageDiv.innerHTML = `
+      <div style="margin-bottom: 15px;">🎉 주문이 완료되었습니다!</div>
+      <div style="font-size: 18px; font-weight: normal;">
+        <span id="countdown">${countdown}</span>초 후 처음 화면으로 돌아갑니다...
+      </div>
+    `;
+    document.body.appendChild(messageDiv);
+
+    // 1초마다 카운트다운
+    const interval = setInterval(() => {
+      countdown--;
+      const countdownEl = document.getElementById('countdown');
+      if (countdownEl) {
+        countdownEl.textContent = countdown;
+      }
+      
+      if (countdown <= 0) {
+        clearInterval(interval);
+      }
+    }, 1000);
+
+    // 5초 후 메시지 제거
+    setTimeout(() => {
+      clearInterval(interval);
+      messageDiv.remove();
+    }, 5000);
   };
 
   const handleMenuClick = (menu) => {
@@ -248,12 +317,11 @@ export default function Main({ cart, setCart, voiceMode }) {
 
   const closeModal = () => {
     setShowModal(false);
-    setShowDetails(false);
   };
 
   const resetOrderNumber = () => {
-    const confirm = window.confirm('주문번호를 100으로 초기화하시겠습니까?');
-    if (confirm) {
+    const confirmReset = window.confirm('주문번호를 100으로 초기화하시겠습니까?');
+    if (confirmReset) {
       setOrderNumber(100);
       localStorage.setItem('orderNumber', '100');
       alert('주문번호가 100으로 초기화되었습니다.');
@@ -264,14 +332,13 @@ export default function Main({ cart, setCart, voiceMode }) {
     return () => {
       stopVoiceRecording();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
     <div className={`mmaaiinn ${showModal ? 'blur-background' : ''}`}>
-      {/* 음성 재생용 audio 태그 */}
       <audio ref={audioPlayerRef} style={{ display: 'none' }} />
 
-      {/* springai 음성 스피커 애니메이션용 요소 (숨김) */}
       <div style={{ display: 'none' }}>
         <div id="user-speaker"></div>
         <div id="ai-speaker"></div>
@@ -378,9 +445,8 @@ export default function Main({ cart, setCart, voiceMode }) {
                             className="ab" 
                             src={trash} 
                             style={{width: 30, height: 30, cursor: 'pointer'}} 
-                            onClick={() => handleDelete(idx)
-                            } 
-                            alt="df"
+                            onClick={() => handleDelete(idx)} 
+                            alt="삭제"
                           />
                         </p>
                       </div>

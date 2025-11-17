@@ -4,7 +4,6 @@ import { useEffect, useState, useRef } from 'react';
 import eulji from '../icons/eulji.png';
 import drinklogo from '../icons/beverage-emoji-style.svg';
 import springai from '../utils/springai';
-// ✅ 녹음한 "주문시작" 파일 import
 import orderStartAudio from '../audio/start.mp3';
 
 function Onboarding({ voiceMode, setVoiceMode }) {
@@ -13,7 +12,7 @@ function Onboarding({ voiceMode, setVoiceMode }) {
   const [isConnected, setIsConnected] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(false);
 
-  const [_isSpeaking ,setIsSpeaking] = useState(false);
+  const [_isSpeaking, setIsSpeaking] = useState(false);
   const isSpeakingRef = useRef(false);
   const voiceEnabledRef = useRef(false);
   const voiceModeRef = useRef(voiceMode);
@@ -114,7 +113,6 @@ function Onboarding({ voiceMode, setVoiceMode }) {
     setIsSpeaking(true);
     isSpeakingRef.current = true;
 
-    // ✅ 녹음한 "주문시작" 파일 재생
     const audio = new Audio(orderStartAudio);
     audio.volume = 1.0;
     
@@ -132,7 +130,6 @@ function Onboarding({ voiceMode, setVoiceMode }) {
         return;
       }
       
-      // ✅ 녹음 파일을 백엔드로 전송
       sendPreRecordedVoiceToBackend();
     };
     
@@ -141,7 +138,6 @@ function Onboarding({ voiceMode, setVoiceMode }) {
       setIsSpeaking(false);
       isSpeakingRef.current = false;
       
-      // 오류 시 바로 마이크 시작
       if (voiceModeRef.current) {
         startMicRecording();
       }
@@ -154,82 +150,75 @@ function Onboarding({ voiceMode, setVoiceMode }) {
     });
   };
 
-  // ✅ 녹음된 "주문시작" 파일을 백엔드로 전송
-const sendPreRecordedVoiceToBackend = async () => {
-  try {
-    console.log('📤 녹음된 "주문시작" 파일을 백엔드로 전송 중...');
-    
-    const response = await fetch(orderStartAudio);
-    const audioBlob = await response.blob();
-    
-    console.log('📊 원본 파일 크기:', audioBlob.size, 'bytes');
-    console.log('📊 원본 파일 타입:', audioBlob.type);
-    
-    // ✅ 파일 타입 명시적으로 설정
-    let fileToSend = audioBlob;
-    
-    // 파일 타입이 없거나 잘못된 경우 수정
-    if (!audioBlob.type || audioBlob.type === '' || !audioBlob.type.includes('audio')) {
-      console.warn('⚠️ 파일 타입이 없거나 잘못됨, audio/mpeg로 변환');
-      fileToSend = new Blob([audioBlob], { type: 'audio/mpeg' });
-      console.log('📊 변환된 타입:', fileToSend.type);
-    }
-    
-    // ✅ File 객체로 변환 (더 명확한 파일 정보 제공)
-    const file = new File([fileToSend], 'order-start.mp3', { 
-      type: 'audio/mpeg',
-      lastModified: Date.now()
-    });
-    
-    console.log('📊 전송할 파일 정보:');
-    console.log('  - 이름:', file.name);
-    console.log('  - 크기:', file.size, 'bytes');
-    console.log('  - 타입:', file.type);
-    console.log('  - 수정일:', new Date(file.lastModified).toLocaleString());
+  const sendPreRecordedVoiceToBackend = async () => {
+    try {
+      console.log('📤 녹음된 "주문시작" 파일을 백엔드로 전송 중...');
+      
+      const response = await fetch(orderStartAudio);
+      const audioBlob = await response.blob();
+      
+      console.log('📊 원본 파일 크기:', audioBlob.size, 'bytes');
+      console.log('📊 원본 파일 타입:', audioBlob.type);
+      
+      let fileToSend = audioBlob;
+      
+      if (!audioBlob.type || audioBlob.type === '' || !audioBlob.type.includes('audio')) {
+        console.warn('⚠️ 파일 타입이 없거나 잘못됨, audio/mpeg로 변환');
+        fileToSend = new Blob([audioBlob], { type: 'audio/mpeg' });
+        console.log('📊 변환된 타입:', fileToSend.type);
+      }
+      
+      const file = new File([fileToSend], 'order-start.mp3', { 
+        type: 'audio/mpeg',
+        lastModified: Date.now()
+      });
+      
+      console.log('📊 전송할 파일 정보:');
+      console.log('  - 이름:', file.name);
+      console.log('  - 크기:', file.size, 'bytes');
+      console.log('  - 타입:', file.type);
 
-    const formData = new FormData();
-    // ✅ File 객체로 전송
-    formData.append('question', file);
+      const formData = new FormData();
+      formData.append('question', file);
 
-    console.log('📤 백엔드로 전송 중...');
-    const backendResponse = await fetch(`${API_BASE_URL}/api/ai/chat-voice`, {
-      method: 'POST',
-      body: formData,
-    });
+      console.log('📤 백엔드로 전송 중...');
+      const backendResponse = await fetch(`${API_BASE_URL}/api/ai/chat-voice`, {
+        method: 'POST',
+        body: formData,
+      });
 
-    if (!backendResponse.ok) {
-      const errorText = await backendResponse.text();
-      console.error('백엔드 에러 응답:', errorText);
-      throw new Error(`백엔드 응답 에러: ${backendResponse.status}`);
-    }
+      if (!backendResponse.ok) {
+        const errorText = await backendResponse.text();
+        console.error('백엔드 에러 응답:', errorText);
+        throw new Error(`백엔드 응답 에러: ${backendResponse.status}`);
+      }
 
-    console.log('✅ 백엔드 응답 수신');
-    console.log('응답 Content-Type:', backendResponse.headers.get('content-type'));
+      console.log('✅ 백엔드 응답 수신');
 
-    const audioPlayer = audioPlayerRef.current;
-    
-    audioPlayer.addEventListener('ended', () => {
-      console.log('🔊 백엔드 AI 음성 재생 완료');
+      const audioPlayer = audioPlayerRef.current;
+      
+      audioPlayer.addEventListener('ended', () => {
+        console.log('🔊 백엔드 AI 음성 재생 완료');
+        setIsSpeaking(false);
+        isSpeakingRef.current = false;
+
+        if (voiceModeRef.current) {
+          startMicRecording();
+        }
+      }, { once: true });
+
+      await springai.voice.playAudioFormStreamingData(backendResponse, audioPlayer);
+
+    } catch (error) {
+      console.error('❌ 초기 음성 전송 오류:', error);
       setIsSpeaking(false);
       isSpeakingRef.current = false;
-
+      
       if (voiceModeRef.current) {
         startMicRecording();
       }
-    }, { once: true });
-
-    await springai.voice.playAudioFormStreamingData(backendResponse, audioPlayer);
-
-  } catch (error) {
-    console.error('❌ 초기 음성 전송 오류:', error);
-    setIsSpeaking(false);
-    isSpeakingRef.current = false;
-    
-    if (voiceModeRef.current) {
-      startMicRecording();
     }
-  }
-};
+  };
 
   const startMicRecording = () => {
     if (!springai || !springai.voice) {
@@ -261,6 +250,33 @@ const sendPreRecordedVoiceToBackend = async () => {
     window.speechSynthesis.cancel();
   };
 
+  // ✅ 음성 인식 결과에서 키워드 체크
+  const checkKeywordAndNavigate = (recognizedText) => {
+    console.log('🔍 키워드 체크:', recognizedText);
+    
+    const keywords = ['포장',  '매장'];
+    
+    const foundKeyword = keywords.some(keyword => 
+      recognizedText.toLowerCase().includes(keyword.toLowerCase())
+    );
+    
+    if (foundKeyword) {
+      console.log('✅ 키워드 감지! Main 페이지로 이동합니다.');
+      
+      // 음성 중지
+      stopVoiceRecording();
+      
+      // 1초 후 Main 페이지로 이동
+      setTimeout(() => {
+        navigate('/main');
+      }, 1000);
+      
+      return true;
+    }
+    
+    return false;
+  };
+
   const handleVoice = async (mp3Blob) => {
     springai.voice.controlSpeakerAnimation('user-speaker', false);
     console.log('🎤 사용자 음성 수신:', mp3Blob);
@@ -269,6 +285,16 @@ const sendPreRecordedVoiceToBackend = async () => {
     if (!voiceModeRef.current) {
       console.log('🔇 음성 모드 비활성화 - 음성 처리 중단');
       return;
+    }
+
+    // ✅ springai에서 인식된 텍스트 가져오기
+    const recognizedText = springai.voice.lastRecognizedText || '';
+    console.log('📝 인식된 텍스트:', recognizedText);
+
+    // ✅ 키워드 체크 (포장/매장)
+    const shouldNavigate = checkKeywordAndNavigate(recognizedText);
+    if (shouldNavigate) {
+      return; // Main 페이지로 이동하므로 백엔드 호출 안 함
     }
 
     if (mp3Blob.size < 5000) {
