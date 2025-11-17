@@ -33,9 +33,9 @@ export default function Main({ cart, setCart, voiceMode }) {
   const navigate = useNavigate();
   const [showModal, setShowModal] = useState(false);
   const [orderNumber, setOrderNumber] = useState(100);
-  const [_showDetails, setShowDetails] = useState(false);
+  const [setShowDetails] = useState(false);
   
-  const [_isSpeaking, setIsSpeaking] = useState(false);
+  const [setIsSpeaking] = useState(false);
   const isSpeakingRef = useRef(false);
   const voiceModeRef = useRef(voiceMode);
   const audioPlayerRef = useRef(null);
