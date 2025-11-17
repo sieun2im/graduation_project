@@ -25,7 +25,7 @@ const Toping = ({ handleAddToCart, voiceMode }) => {
   const [teaTemp] = useState('HOT');
   const [teaIce, setTeaIce] = useState('NORMAL');
 
-  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [_isSpeaking, setIsSpeaking] = useState(false);
   const isSpeakingRef = useRef(false);
   const voiceModeRef = useRef(voiceMode);
   const audioPlayerRef = useRef(null);
