@@ -347,16 +347,18 @@ function Onboarding({ voiceMode, setVoiceMode }) {
 // ✅ CH340 초기화 함수 (완전 버전)
 const initCH340 = async (device, baudRate) => {
   try {
-    console.log('⚙️ CH340 초기화 시작');
+    console.log('⚙️ CH340 초기화 시작 (115200 baud)');
     
-    const divisor = 2;
-    const subdivisor = 134;
+    // ✅ 115200 baud
+    const divisor = 0;
+    const subdivisor = 17;
     const index = divisor | (subdivisor << 8);
     
+    console.log('Baud Rate: 115200');
     console.log('Divisor:', divisor, 'Subdivisor:', subdivisor);
     console.log('Index:', index);
     
-    // 1. Baud Rate 설정
+    // Baud Rate 설정
     await device.controlTransferOut({
       requestType: 'vendor',
       recipient: 'device',
@@ -366,7 +368,7 @@ const initCH340 = async (device, baudRate) => {
     });
     console.log('✅ Baud Rate 설정');
     
-    // 2. CH340 초기화
+    // CH340 초기화
     await device.controlTransferOut({
       requestType: 'vendor',
       recipient: 'device',
@@ -376,7 +378,7 @@ const initCH340 = async (device, baudRate) => {
     });
     console.log('✅ CH340 초기화');
     
-    // 3. DTR/RTS 활성화
+    // DTR/RTS 활성화
     await device.controlTransferOut({
       requestType: 'vendor',
       recipient: 'device',
@@ -386,49 +388,17 @@ const initCH340 = async (device, baudRate) => {
     });
     console.log('✅ DTR/RTS 활성화');
     
-    // 4. ✅ Line Control 설정 (중요!)
-    await device.controlTransferOut({
-      requestType: 'vendor',
-      recipient: 'device',
-      request: 0x9a,
-      value: 0xc3,   // 8 data bits, no parity, 1 stop bit
-      index: 0x0008
-    });
-    console.log('✅ Line Control 설정 (8N1)');
-    
-    // 5. ✅ 아두이노 리셋 (DTR 토글)
-    console.log('🔄 아두이노 리셋 중...');
-    
-    // DTR OFF
-    await device.controlTransferOut({
-      requestType: 'vendor',
-      recipient: 'device',
-      request: 0xa4,
-      value: 0x0000, // DTR=0, RTS=0
-      index: 0
-    });
-    
-    await new Promise(resolve => setTimeout(resolve, 100));
-    
-    // DTR ON
-    await device.controlTransferOut({
-      requestType: 'vendor',
-      recipient: 'device',
-      request: 0xa4,
-      value: 0x0101, // DTR=1, RTS=1
-      index: 0
-    });
-    
-    console.log('⏳ 아두이노 재부팅 대기 (2초)...');
+    // 대기
     await new Promise(resolve => setTimeout(resolve, 2000));
     
-    console.log('✅ CH340 완전 초기화 완료!');
+    console.log('✅ CH340 초기화 완료 (115200)');
     
   } catch (error) {
     console.error('❌ CH340 초기화 실패:', error);
     throw error;
   }
 };
+
 
 
 
