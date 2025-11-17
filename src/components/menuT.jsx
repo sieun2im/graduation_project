@@ -8,7 +8,7 @@ import orderStartAudio from '../audio/start.mp3';
 
 function Onboarding({ voiceMode, setVoiceMode }) {
   const navigate = useNavigate();
-  const [device, setDevice] = useState(null);
+  const [port, setPort] = useState(null); // ✅ device → port
   const [isConnected, setIsConnected] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(false);
 
@@ -16,9 +16,9 @@ function Onboarding({ voiceMode, setVoiceMode }) {
   const isSpeakingRef = useRef(false);
   const voiceEnabledRef = useRef(false);
   const voiceModeRef = useRef(voiceMode);
-  const deviceRef = useRef(null);
+  const portRef = useRef(null); // ✅ deviceRef → portRef
   const audioPlayerRef = useRef(null);
-  const readingRef = useRef(false);
+  const readerRef = useRef(null); // ✅ 추가
   
   const [userDetected, setUserDetected] = useState(false);
   const userDetectedRef = useRef(false);
@@ -60,14 +60,7 @@ function Onboarding({ voiceMode, setVoiceMode }) {
         
       } catch (error) {
         console.error('❌ 마이크 권한 오류:', error);
-        
-        if (error.name === 'NotAllowedError') {
-          alert('마이크 권한이 거부되었습니다.\n브라우저 설정에서 마이크 권한을 허용해주세요.');
-        } else if (error.name === 'NotFoundError') {
-          alert('마이크를 찾을 수 없습니다.');
-        } else {
-          alert('마이크 접근 중 오류가 발생했습니다.\nHTTPS 연결인지 확인해주세요.');
-        }
+        alert('마이크 권한을 허용해주세요.');
       }
     }
   };
@@ -117,15 +110,10 @@ function Onboarding({ voiceMode, setVoiceMode }) {
     const audio = new Audio(orderStartAudio);
     audio.volume = 1.0;
     
-    audio.onplay = () => {
-      console.log('🔊 "주문시작" 오디오 재생 시작');
-    };
-    
     audio.onended = () => {
       console.log('[audio] "주문시작" 음성 재생 종료');
       
       if (!voiceModeRef.current) {
-        console.log('🔇 음성 모드 비활성화됨 - 백엔드 호출 중단');
         setIsSpeaking(false);
         isSpeakingRef.current = false;
         return;
@@ -153,15 +141,12 @@ function Onboarding({ voiceMode, setVoiceMode }) {
 
   const sendPreRecordedVoiceToBackend = async () => {
     try {
-      console.log('📤 녹음된 "주문시작" 파일을 백엔드로 전송 중...');
-      
       const response = await fetch(orderStartAudio);
       const audioBlob = await response.blob();
       
       let fileToSend = audioBlob;
       
-      if (!audioBlob.type || audioBlob.type === '' || !audioBlob.type.includes('audio')) {
-        console.warn('⚠️ 파일 타입이 없거나 잘못됨, audio/mpeg로 변환');
+      if (!audioBlob.type || !audioBlob.type.includes('audio')) {
         fileToSend = new Blob([audioBlob], { type: 'audio/mpeg' });
       }
       
@@ -173,24 +158,18 @@ function Onboarding({ voiceMode, setVoiceMode }) {
       const formData = new FormData();
       formData.append('question', file);
 
-      console.log('📤 백엔드로 전송 중...');
       const backendResponse = await fetch(`${API_BASE_URL}/api/ai/chat-voice`, {
         method: 'POST',
         body: formData,
       });
 
       if (!backendResponse.ok) {
-        const errorText = await backendResponse.text();
-        console.error('백엔드 에러 응답:', errorText);
         throw new Error(`백엔드 응답 에러: ${backendResponse.status}`);
       }
-
-      console.log('✅ 백엔드 응답 수신');
 
       const audioPlayer = audioPlayerRef.current;
       
       audioPlayer.addEventListener('ended', () => {
-        console.log('🔊 백엔드 AI 음성 재생 완료');
         setIsSpeaking(false);
         isSpeakingRef.current = false;
 
@@ -219,7 +198,6 @@ function Onboarding({ voiceMode, setVoiceMode }) {
     }
     
     if (!voiceModeRef.current) {
-      console.log('🔇 음성 모드 비활성화 - 마이크 시작 중단');
       return;
     }
     
@@ -243,8 +221,6 @@ function Onboarding({ voiceMode, setVoiceMode }) {
   };
 
   const checkKeywordAndNavigate = (recognizedText) => {
-    console.log('🔍 키워드 체크:', recognizedText);
-    
     const keywords = ['포장', '테이크아웃', 'take out', '매장', '먹고', 'dine in', '여기서'];
     
     const foundKeyword = keywords.some(keyword => 
@@ -253,13 +229,10 @@ function Onboarding({ voiceMode, setVoiceMode }) {
     
     if (foundKeyword) {
       console.log('✅ 키워드 감지! Main 페이지로 이동합니다.');
-      
       stopVoiceRecording();
-      
       setTimeout(() => {
         navigate('/main');
       }, 1000);
-      
       return true;
     }
     
@@ -268,15 +241,12 @@ function Onboarding({ voiceMode, setVoiceMode }) {
 
   const handleVoice = async (mp3Blob) => {
     springai.voice.controlSpeakerAnimation('user-speaker', false);
-    console.log('🎤 사용자 음성 수신:', mp3Blob);
 
     if (!voiceModeRef.current) {
-      console.log('🔇 음성 모드 비활성화 - 음성 처리 중단');
       return;
     }
 
     const recognizedText = springai.voice.lastRecognizedText || '';
-    console.log('📝 인식된 텍스트:', recognizedText);
 
     const shouldNavigate = checkKeywordAndNavigate(recognizedText);
     if (shouldNavigate) {
@@ -284,7 +254,6 @@ function Onboarding({ voiceMode, setVoiceMode }) {
     }
 
     if (mp3Blob.size < 5000) {
-      console.warn('⚠️ 음성이 너무 짧습니다. 다시 말씀해주세요.');
       setTimeout(() => {
         if (voiceModeRef.current) {
           startMicRecording();
@@ -300,26 +269,20 @@ function Onboarding({ voiceMode, setVoiceMode }) {
       const formData = new FormData();
       formData.append('question', mp3Blob, 'user-speech.mp3');
 
-      console.log('📤 백엔드로 음성 전송 중...');
       const response = await fetch(`${API_BASE_URL}/api/ai/chat-voice`, {
         method: 'POST',
         body: formData,
       });
 
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error('백엔드 에러 응답:', errorText);
         throw new Error(`백엔드 응답 에러: ${response.status}`);
       }
-
-      console.log('✅ 백엔드 응답 수신');
       
       springai.voice.controlSpeakerAnimation('ai-speaker', true);
 
       const audioPlayer = audioPlayerRef.current;
       
       audioPlayer.addEventListener('ended', () => {
-        console.log('🔊 AI 응답 음성 재생 완료');
         springai.voice.controlSpeakerAnimation('ai-speaker', false);
         setIsSpeaking(false);
         isSpeakingRef.current = false;
@@ -338,165 +301,63 @@ function Onboarding({ voiceMode, setVoiceMode }) {
       setIsSpeaking(false);
       isSpeakingRef.current = false;
       springai.voice.controlSpeakerAnimation('ai-speaker', false);
-      
-      alert('백엔드 서버와 통신 중 오류가 발생했습니다.');
     }
   };
 
-  // ✅ CH340 초기화 함수 (Baud Rate 설정)
-// ✅ CH340 초기화 함수 (완전 버전)
-const initCH340 = async (device, baudRate) => {
-  try {
-    console.log('⚙️ CH340 초기화 시작 (115200 baud)');
-    
-    // ✅ 115200 baud
-    const divisor = 0;
-    const subdivisor = 17;
-    const index = divisor | (subdivisor << 8);
-    
-    console.log('Baud Rate: 115200');
-    console.log('Divisor:', divisor, 'Subdivisor:', subdivisor);
-    console.log('Index:', index);
-    
-    // Baud Rate 설정
-    await device.controlTransferOut({
-      requestType: 'vendor',
-      recipient: 'device',
-      request: 0x9a,
-      value: 0x1312,
-      index: index
-    });
-    console.log('✅ Baud Rate 설정');
-    
-    // CH340 초기화
-    await device.controlTransferOut({
-      requestType: 'vendor',
-      recipient: 'device',
-      request: 0xa1,
-      value: 0,
-      index: 0
-    });
-    console.log('✅ CH340 초기화');
-    
-    // DTR/RTS 활성화
-    await device.controlTransferOut({
-      requestType: 'vendor',
-      recipient: 'device',
-      request: 0xa4,
-      value: 0x0101,
-      index: 0
-    });
-    console.log('✅ DTR/RTS 활성화');
-    
-    // 대기
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    console.log('✅ CH340 초기화 완료 (115200)');
-    
-  } catch (error) {
-    console.error('❌ CH340 초기화 실패:', error);
-    throw error;
-  }
-};
-
-
-
-
-  // ✅ WebUSB로 아두이노 연결
+  // ✅ Web Serial API로 아두이노 연결
   const connectArduino = async () => {
     try {
-      if (!('usb' in navigator)) {
-        alert('❌ WebUSB API를 지원하지 않는 브라우저입니다.\nChrome 브라우저를 사용해주세요.');
+      if (!('serial' in navigator)) {
+        alert('❌ Web Serial API를 지원하지 않는 브라우저입니다.\nChrome 브라우저를 사용해주세요.');
         return;
       }
 
-      console.log('🔌 WebUSB로 아두이노 연결 시도...');
+      console.log('🔌 Web Serial API로 아두이노 연결 시도...');
       
-      const selectedDevice = await navigator.usb.requestDevice({ 
-        filters: [
-          { vendorId: 0x1a86 }, // CH340
-          { vendorId: 0x0403 }, // FTDI
-          { vendorId: 0x10c4 }, // CP210x
-          { vendorId: 0x2341 }, // Arduino 정품
-          { vendorId: 0x2a03 }  // Arduino 정품
-        ]
+      // ✅ 모든 장치 표시
+      const selectedPort = await navigator.serial.requestPort({ 
+        filters: []
       });
 
-      console.log('✅ USB 장치 선택됨:', selectedDevice);
-      console.log('장치 정보:', {
-        vendorId: '0x' + selectedDevice.vendorId.toString(16),
-        productId: '0x' + selectedDevice.productId.toString(16)
-      });
+      console.log('✅ 포트 선택됨');
       
-      // 장치가 이미 열려있으면 닫기
-      if (selectedDevice.opened) {
-        console.log('⚠️ 장치가 이미 열려있음, 먼저 닫기...');
-        await selectedDevice.close();
-        await new Promise(resolve => setTimeout(resolve, 500));
-      }
-      
-      // 장치 열기
-      await selectedDevice.open();
-      console.log('✅ 장치 열기 성공');
-      
-      // Configuration 선택
-      if (selectedDevice.configuration === null) {
-        await selectedDevice.selectConfiguration(1);
-        console.log('✅ Configuration 1 선택됨');
-      }
-      
-      // Interface claim
-      let interfaceClaimed = false;
-      for (const interfaceNumber of [0, 1, 2]) {
-        try {
-          await selectedDevice.claimInterface(interfaceNumber);
-          console.log(`✅ Interface ${interfaceNumber} Claim 성공!`);
-          interfaceClaimed = true;
-          break;
-        } catch (error) {
-          console.warn(`⚠️ Interface ${interfaceNumber} Claim 실패`);
-        }
-      }
-      
-      if (!interfaceClaimed) {
-        throw new Error('Interface Claim 실패');
-      }
-      
-      // ✅ CH340 초기화 (Baud Rate 9600 설정)
-      await initCH340(selectedDevice, 9600);
-      
-      console.log('✅ 아두이노 WebUSB 연결 성공!');
-      
-      setDevice(selectedDevice);
-      deviceRef.current = selectedDevice;
+      // ✅ 9600 baud로 열기
+      await selectedPort.open({ baudRate: 9600 });
+      console.log('✅ 포트 열림 (9600 baud)');
+
+      setPort(selectedPort);
+      portRef.current = selectedPort;
       setIsConnected(true);
       
       // 데이터 읽기 시작
-      readArduinoData(selectedDevice);
+      readArduinoData(selectedPort);
+      
+      console.log('✅ 아두이노 연결 성공!');
 
     } catch (error) {
-      console.error('❌ 아두이노 연결 실패:', error);
+      console.error('아두이노 연결 실패:', error);
       
       if (error.name === 'NotFoundError') {
-        alert('USB 장치를 선택하지 않았습니다.');
-      } else if (error.name === 'NetworkError') {
-        alert('USB 장치가 다른 앱에서 사용 중입니다!\n\nUSB Serial Console 앱을 완전히 종료하고 다시 시도해주세요.');
+        alert('포트를 선택하지 않았습니다.');
       } else {
-        alert('아두이노 연결 실패:\n' + error.message);
+        alert('아두이노 연결 실패: ' + error.message);
       }
     }
   };
 
   const disconnectArduino = async () => {
     try {
-      readingRef.current = false;
-      
-      if (deviceRef.current) {
-        await deviceRef.current.close();
+      if (readerRef.current) {
+        await readerRef.current.cancel();
+        readerRef.current = null;
       }
       
-      setDevice(null);
-      deviceRef.current = null;
+      if (portRef.current) {
+        await portRef.current.close();
+      }
+      
+      setPort(null);
+      portRef.current = null;
       setIsConnected(false);
       
       console.log('✅ 아두이노 연결 해제 완료');
@@ -505,128 +366,69 @@ const initCH340 = async (device, baudRate) => {
     }
   };
 
-  // ✅ WebUSB로 데이터 읽기 (수정됨)
-const readArduinoData = async (selectedDevice) => {
-  readingRef.current = true;
-  
-  try {
-    console.log('📡 아두이노 데이터 수신 시작...');
-    
-    // Endpoint 자동 감지
-    let workingEndpoint = 2; // 기본값
-    const endpoints = [2, 1, 0x82, 0x81];
-    
-    console.log('🔍 Endpoint 자동 감지 중...');
-    for (const ep of endpoints) {
-      try {
-        const testResult = await Promise.race([
-          selectedDevice.transferIn(ep, 64),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 500))
-        ]);
+  // ✅ Web Serial API로 데이터 읽기
+  const readArduinoData = async (selectedPort) => {
+    try {
+      console.log('📡 아두이노 데이터 수신 시작...');
+      
+      const textDecoder = new TextDecoderStream();
+      selectedPort.readable.pipeTo(textDecoder.writable);
+      const reader = textDecoder.readable.getReader();
+      readerRef.current = reader;
+
+      while (true) {
+        const { value, done } = await reader.read();
         
-        if (testResult.data) {
-          console.log(`✅ Endpoint ${ep} 작동!`);
-          workingEndpoint = ep;
+        if (done) {
+          reader.releaseLock();
+          readerRef.current = null;
           break;
         }
-      } catch (error) {
-        console.log(`❌ Endpoint ${ep} 실패`);
-      }
-    }
-    
-    console.log(`📍 Endpoint ${workingEndpoint} 사용`);
-    
-    let buffer = '';
-    let loopCount = 0;
-    
-    while (readingRef.current && deviceRef.current) {
-      try {
-        loopCount++;
         
-        if (loopCount % 10 === 0) {
-          console.log(`📊 데이터 대기 중... (${loopCount}회)`);
-        }
-        
-        const result = await Promise.race([
-          selectedDevice.transferIn(workingEndpoint, 64),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 2000))
-        ]);
-        
-        if (result.data && result.data.byteLength > 0) {
-          console.log('✅ 데이터 수신:', result.data.byteLength, 'bytes');
+        if (value) {
+          const lines = value.split('\n').map(line => line.trim()).filter(line => line.length > 0);
           
-          const decoder = new TextDecoder('utf-8');
-          const text = decoder.decode(result.data);
-          console.log('📝 원본:', JSON.stringify(text));
-          
-          buffer += text;
-          
-          const lines = buffer.split('\n');
-          buffer = lines.pop() || '';
-          
-          for (const line of lines) {
-            const data = line.replace(/\r/g, '').trim();
+          for (const data of lines) {
+            console.log('📡 수신 데이터:', data);
             
-            if (data.length > 0) {
-              console.log('📡 수신:', data);
+            if (data.includes('USER_DETECTED')) {
+              console.log(`🎉 사용자 감지됨!`);
               
-              if (data.includes('USER_DETECTED')) {
-                console.log('🎉 사용자 감지!');
-                
-                if (!userDetectedRef.current && voiceEnabledRef.current && !isSpeakingRef.current) {
-                  setUserDetected(true);
-                  userDetectedRef.current = true;
-                  playWelcomeMessage();
-                }
+              if (userDetectedRef.current) {
+                continue;
+              }
+              
+              if (!isSpeakingRef.current && voiceEnabledRef.current) {
+                playWelcomeMessage();
               }
             }
           }
         }
-        
-      } catch (readError) {
-        if (readError.message !== 'Timeout') {
-          console.error('📡 오류:', readError);
-        }
       }
-      
-      await new Promise(resolve => setTimeout(resolve, 50));
+    } catch (error) {
+      console.error('📡 시리얼 읽기 중 오류:', error);
+      setIsConnected(false);
     }
-  } catch (error) {
-    console.error('📡 치명적 오류:', error);
-    setIsConnected(false);
-    readingRef.current = false;
-  }
-};
-
+  };
 
   useEffect(() => {
     const autoConnect = async () => {
       try {
-        if ('usb' in navigator) {
-          const devices = await navigator.usb.getDevices();
+        if ('serial' in navigator) {
+          const ports = await navigator.serial.getPorts();
 
-          if (devices.length > 0) {
-            const selectedDevice = devices[0];
-            
-            await selectedDevice.open();
-            if (selectedDevice.configuration === null) {
-              await selectedDevice.selectConfiguration(1);
-            }
-            await selectedDevice.claimInterface(0);
-            
-            // ✅ 자동 연결 시에도 CH340 초기화
-            await initCH340(selectedDevice, 9600);
-            
-            setDevice(selectedDevice);
-            deviceRef.current = selectedDevice;
+          if (ports.length > 0) {
+            const selectedPort = ports[0];
+            await selectedPort.open({ baudRate: 9600 });
+            setPort(selectedPort);
+            portRef.current = selectedPort;
             setIsConnected(true);
-            readArduinoData(selectedDevice);
-            
+            readArduinoData(selectedPort);
             console.log('✅ 아두이노 자동 재연결 성공!');
           }
         }
       } catch (error) {
-        console.log('자동 연결 실패:', error.message);
+        console.log('자동 연결 실패');
       }
     };
 
@@ -634,10 +436,8 @@ const readArduinoData = async (selectedDevice) => {
 
     return () => {
       stopVoiceRecording();
-      readingRef.current = false;
-      if (deviceRef.current) {
-        deviceRef.current.close().catch(console.error);
-      }
+      if (readerRef.current) readerRef.current.cancel().catch(console.error);
+      if (portRef.current) portRef.current.close().catch(console.error);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -684,7 +484,7 @@ const readArduinoData = async (selectedDevice) => {
         {isConnected ? (
           <div className="status-connected">
             <span className="status-dot"></span>
-            아두이노 연결됨 (WebUSB)
+            아두이노 연결됨 (Web Serial)
             {userDetected && (
               <span style={{marginLeft: '10px', color: '#4CAF50', fontSize: '14px'}}>
                 ✓ 사용자 감지됨
@@ -701,7 +501,7 @@ const readArduinoData = async (selectedDevice) => {
           </div>
         ) : (
           <button className="connect-btn arduino-btn" onClick={connectArduino}>
-            🔌 아두이노 수동 연결 (WebUSB)
+            🔌 아두이노 수동 연결
           </button>
         )}
       </div>
