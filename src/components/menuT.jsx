@@ -8,7 +8,7 @@ import orderStartAudio from '../audio/start.mp3';
 
 function Onboarding({ voiceMode, setVoiceMode }) {
   const navigate = useNavigate();
-  const [port, setPort] = useState(null); // ✅ device → port
+  const [port, setPort] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(false);
 
@@ -16,9 +16,8 @@ function Onboarding({ voiceMode, setVoiceMode }) {
   const isSpeakingRef = useRef(false);
   const voiceEnabledRef = useRef(false);
   const voiceModeRef = useRef(voiceMode);
-  const portRef = useRef(null); // ✅ deviceRef → portRef
+  const readerRef = useRef(null);
   const audioPlayerRef = useRef(null);
-  const readerRef = useRef(null); // ✅ 추가
   
   const [userDetected, setUserDetected] = useState(false);
   const userDetectedRef = useRef(false);
@@ -60,7 +59,14 @@ function Onboarding({ voiceMode, setVoiceMode }) {
         
       } catch (error) {
         console.error('❌ 마이크 권한 오류:', error);
-        alert('마이크 권한을 허용해주세요.');
+        
+        if (error.name === 'NotAllowedError') {
+          alert('마이크 권한이 거부되었습니다.\n브라우저 설정에서 마이크 권한을 허용해주세요.');
+        } else if (error.name === 'NotFoundError') {
+          alert('마이크를 찾을 수 없습니다.');
+        } else {
+          alert('마이크 접근 중 오류가 발생했습니다.\nHTTPS 연결인지 확인해주세요.');
+        }
       }
     }
   };
@@ -110,10 +116,15 @@ function Onboarding({ voiceMode, setVoiceMode }) {
     const audio = new Audio(orderStartAudio);
     audio.volume = 1.0;
     
+    audio.onplay = () => {
+      console.log('🔊 "주문시작" 오디오 재생 시작');
+    };
+    
     audio.onended = () => {
       console.log('[audio] "주문시작" 음성 재생 종료');
       
       if (!voiceModeRef.current) {
+        console.log('🔇 음성 모드 비활성화됨 - 백엔드 호출 중단');
         setIsSpeaking(false);
         isSpeakingRef.current = false;
         return;
@@ -141,35 +152,53 @@ function Onboarding({ voiceMode, setVoiceMode }) {
 
   const sendPreRecordedVoiceToBackend = async () => {
     try {
+      console.log('📤 녹음된 "주문시작" 파일을 백엔드로 전송 중...');
+      
       const response = await fetch(orderStartAudio);
       const audioBlob = await response.blob();
       
+      console.log('📊 원본 파일 크기:', audioBlob.size, 'bytes');
+      console.log('📊 원본 파일 타입:', audioBlob.type);
+      
       let fileToSend = audioBlob;
       
-      if (!audioBlob.type || !audioBlob.type.includes('audio')) {
+      if (!audioBlob.type || audioBlob.type === '' || !audioBlob.type.includes('audio')) {
+        console.warn('⚠️ 파일 타입이 없거나 잘못됨, audio/mpeg로 변환');
         fileToSend = new Blob([audioBlob], { type: 'audio/mpeg' });
+        console.log('📊 변환된 타입:', fileToSend.type);
       }
       
       const file = new File([fileToSend], 'order-start.mp3', { 
         type: 'audio/mpeg',
         lastModified: Date.now()
       });
+      
+      console.log('📊 전송할 파일 정보:');
+      console.log('  - 이름:', file.name);
+      console.log('  - 크기:', file.size, 'bytes');
+      console.log('  - 타입:', file.type);
 
       const formData = new FormData();
       formData.append('question', file);
 
+      console.log('📤 백엔드로 전송 중...');
       const backendResponse = await fetch(`${API_BASE_URL}/api/ai/chat-voice`, {
         method: 'POST',
         body: formData,
       });
 
       if (!backendResponse.ok) {
+        const errorText = await backendResponse.text();
+        console.error('백엔드 에러 응답:', errorText);
         throw new Error(`백엔드 응답 에러: ${backendResponse.status}`);
       }
+
+      console.log('✅ 백엔드 응답 수신');
 
       const audioPlayer = audioPlayerRef.current;
       
       audioPlayer.addEventListener('ended', () => {
+        console.log('🔊 백엔드 AI 음성 재생 완료');
         setIsSpeaking(false);
         isSpeakingRef.current = false;
 
@@ -198,6 +227,7 @@ function Onboarding({ voiceMode, setVoiceMode }) {
     }
     
     if (!voiceModeRef.current) {
+      console.log('🔇 음성 모드 비활성화 - 마이크 시작 중단');
       return;
     }
     
@@ -220,8 +250,11 @@ function Onboarding({ voiceMode, setVoiceMode }) {
     window.speechSynthesis.cancel();
   };
 
+  // ✅ 음성 인식 결과에서 키워드 체크
   const checkKeywordAndNavigate = (recognizedText) => {
-    const keywords = ['포장', '테이크아웃', 'take out', '매장', '먹고', 'dine in', '여기서'];
+    console.log('🔍 키워드 체크:', recognizedText);
+    
+    const keywords = ['포장',  '매장'];
     
     const foundKeyword = keywords.some(keyword => 
       recognizedText.toLowerCase().includes(keyword.toLowerCase())
@@ -229,10 +262,15 @@ function Onboarding({ voiceMode, setVoiceMode }) {
     
     if (foundKeyword) {
       console.log('✅ 키워드 감지! Main 페이지로 이동합니다.');
+      
+      // 음성 중지
       stopVoiceRecording();
+      
+      // 1초 후 Main 페이지로 이동
       setTimeout(() => {
         navigate('/main');
       }, 1000);
+      
       return true;
     }
     
@@ -241,19 +279,26 @@ function Onboarding({ voiceMode, setVoiceMode }) {
 
   const handleVoice = async (mp3Blob) => {
     springai.voice.controlSpeakerAnimation('user-speaker', false);
+    console.log('🎤 사용자 음성 수신:', mp3Blob);
+    console.log('📊 파일 크기:', mp3Blob.size, 'bytes');
 
     if (!voiceModeRef.current) {
+      console.log('🔇 음성 모드 비활성화 - 음성 처리 중단');
       return;
     }
 
+    // ✅ springai에서 인식된 텍스트 가져오기
     const recognizedText = springai.voice.lastRecognizedText || '';
+    console.log('📝 인식된 텍스트:', recognizedText);
 
+    // ✅ 키워드 체크 (포장/매장)
     const shouldNavigate = checkKeywordAndNavigate(recognizedText);
     if (shouldNavigate) {
-      return;
+      return; // Main 페이지로 이동하므로 백엔드 호출 안 함
     }
 
     if (mp3Blob.size < 5000) {
+      console.warn('⚠️ 음성이 너무 짧습니다. 다시 말씀해주세요.');
       setTimeout(() => {
         if (voiceModeRef.current) {
           startMicRecording();
@@ -269,20 +314,26 @@ function Onboarding({ voiceMode, setVoiceMode }) {
       const formData = new FormData();
       formData.append('question', mp3Blob, 'user-speech.mp3');
 
+      console.log('📤 백엔드로 음성 전송 중...');
       const response = await fetch(`${API_BASE_URL}/api/ai/chat-voice`, {
         method: 'POST',
         body: formData,
       });
 
       if (!response.ok) {
+        const errorText = await response.text();
+        console.error('백엔드 에러 응답:', errorText);
         throw new Error(`백엔드 응답 에러: ${response.status}`);
       }
+
+      console.log('✅ 백엔드 응답 수신');
       
       springai.voice.controlSpeakerAnimation('ai-speaker', true);
 
       const audioPlayer = audioPlayerRef.current;
       
       audioPlayer.addEventListener('ended', () => {
+        console.log('🔊 AI 응답 음성 재생 완료');
         springai.voice.controlSpeakerAnimation('ai-speaker', false);
         setIsSpeaking(false);
         isSpeakingRef.current = false;
@@ -301,47 +352,29 @@ function Onboarding({ voiceMode, setVoiceMode }) {
       setIsSpeaking(false);
       isSpeakingRef.current = false;
       springai.voice.controlSpeakerAnimation('ai-speaker', false);
+      
+      alert('백엔드 서버와 통신 중 오류가 발생했습니다.');
     }
   };
 
-  // ✅ Web Serial API로 아두이노 연결
   const connectArduino = async () => {
     try {
-      if (!('serial' in navigator)) {
+      if ('serial' in navigator) {
+        console.log('🔌 포트 선택 대기 중...');
+        const selectedPort = await navigator.serial.requestPort();
+        await selectedPort.open({ baudRate: 9600 });
+
+        setPort(selectedPort);
+        setIsConnected(true);
+        readArduinoData(selectedPort);
+
+        console.log('✅ 아두이노 연결 성공!');
+      } else {
         alert('❌ Web Serial API를 지원하지 않는 브라우저입니다.\nChrome 브라우저를 사용해주세요.');
-        return;
       }
-
-      console.log('🔌 Web Serial API로 아두이노 연결 시도...');
-      
-      // ✅ 모든 장치 표시
-      const selectedPort = await navigator.serial.requestPort({ 
-        filters: []
-      });
-
-      console.log('✅ 포트 선택됨');
-      
-      // ✅ 9600 baud로 열기
-      await selectedPort.open({ baudRate: 9600 });
-      console.log('✅ 포트 열림 (9600 baud)');
-
-      setPort(selectedPort);
-      portRef.current = selectedPort;
-      setIsConnected(true);
-      
-      // 데이터 읽기 시작
-      readArduinoData(selectedPort);
-      
-      console.log('✅ 아두이노 연결 성공!');
-
     } catch (error) {
       console.error('아두이노 연결 실패:', error);
-      
-      if (error.name === 'NotFoundError') {
-        alert('포트를 선택하지 않았습니다.');
-      } else {
-        alert('아두이노 연결 실패: ' + error.message);
-      }
+      alert('아두이노 연결에 실패했습니다. USB 케이블을 확인해주세요.');
     }
   };
 
@@ -351,28 +384,22 @@ function Onboarding({ voiceMode, setVoiceMode }) {
         await readerRef.current.cancel();
         readerRef.current = null;
       }
-      
-      if (portRef.current) {
-        await portRef.current.close();
+      if (port) {
+        await port.close();
       }
-      
       setPort(null);
-      portRef.current = null;
       setIsConnected(false);
-      
       console.log('✅ 아두이노 연결 해제 완료');
     } catch (error) {
       console.error('아두이노 연결 해제 실패:', error);
     }
   };
 
-  // ✅ Web Serial API로 데이터 읽기
   const readArduinoData = async (selectedPort) => {
     try {
-      console.log('📡 아두이노 데이터 수신 시작...');
-      
       const textDecoder = new TextDecoderStream();
       selectedPort.readable.pipeTo(textDecoder.writable);
+      
       const reader = textDecoder.readable.getReader();
       readerRef.current = reader;
 
@@ -391,15 +418,18 @@ function Onboarding({ voiceMode, setVoiceMode }) {
           for (const data of lines) {
             console.log('📡 수신 데이터:', data);
             
-            if (data.includes('USER_DETECTED')) {
-              console.log(`🎉 사용자 감지됨!`);
+            if (data.toUpperCase().includes('USER_DETECT')) {
+              console.log(`[readArduinoData] USER_DETECTED 신호 수신`);
               
               if (userDetectedRef.current) {
+                console.log('[readArduinoData] 이미 사용자 감지됨 - 추가 감지 무시');
                 continue;
               }
               
               if (!isSpeakingRef.current && voiceEnabledRef.current) {
                 playWelcomeMessage();
+              } else {
+                console.log('[readArduinoData] 음성 재생 중이거나 음성 비활성화 상태');
               }
             }
           }
@@ -421,7 +451,6 @@ function Onboarding({ voiceMode, setVoiceMode }) {
             const selectedPort = ports[0];
             await selectedPort.open({ baudRate: 9600 });
             setPort(selectedPort);
-            portRef.current = selectedPort;
             setIsConnected(true);
             readArduinoData(selectedPort);
             console.log('✅ 아두이노 자동 재연결 성공!');
@@ -437,7 +466,7 @@ function Onboarding({ voiceMode, setVoiceMode }) {
     return () => {
       stopVoiceRecording();
       if (readerRef.current) readerRef.current.cancel().catch(console.error);
-      if (portRef.current) portRef.current.close().catch(console.error);
+      if (port) port.close().catch(console.error);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -484,7 +513,7 @@ function Onboarding({ voiceMode, setVoiceMode }) {
         {isConnected ? (
           <div className="status-connected">
             <span className="status-dot"></span>
-            아두이노 연결됨 (Web Serial)
+            아두이노 연결됨
             {userDetected && (
               <span style={{marginLeft: '10px', color: '#4CAF50', fontSize: '14px'}}>
                 ✓ 사용자 감지됨
