@@ -1,14 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import strawberry from '../icons/strawberry.jpg';
+import springai from '../utils/springai';
 import './toping.css';
 
-const Toping = ({ handleAddToCart }) => {
+const Toping = ({ handleAddToCart, voiceMode }) => {
   const navigate = useNavigate();
   const { state } = useLocation();
   const menu = state?.menu;
 
-  // 공통 옵션 상태
   const [count, setCount] = useState(1);
   const [sizeUp, setSizeUp] = useState(false);
   const [shot, setShot] = useState(0);
@@ -16,17 +16,175 @@ const Toping = ({ handleAddToCart }) => {
   const [syrupVanilla, setSyrupVanilla] = useState(0);
   const [syrupHazelnut, setSyrupHazelnut] = useState(0);
 
-  // 커피 옵션
   const [decaf, setDecaf] = useState(false);
   const [coffeeTemp, setCoffeeTemp] = useState('ICE');
   const [coffeeIce, setCoffeeIce] = useState('NORMAL');
 
-  // 스무디 옵션
   const [pearl, setPearl] = useState(false);
 
-  // 티 옵션
   const [teaTemp, setTeaTemp] = useState('HOT');
   const [teaIce, setTeaIce] = useState('NORMAL');
+
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const isSpeakingRef = useRef(false);
+  const voiceModeRef = useRef(voiceMode);
+  const audioPlayerRef = useRef(null);
+  const conversationStartedRef = useRef(false);
+
+  useEffect(() => {
+    voiceModeRef.current = voiceMode;
+    
+    if (!voiceMode) {
+      console.log('🔇 Toping - 음성 모드 비활성화');
+      stopVoiceRecording();
+    }
+  }, [voiceMode]);
+
+  useEffect(() => {
+    if (voiceMode && !conversationStartedRef.current) {
+      conversationStartedRef.current = true;
+      setTimeout(() => {
+        startBackendConversation();
+      }, 500);
+    }
+  }, [voiceMode]);
+
+  const startBackendConversation = async () => {
+    if (!voiceModeRef.current) {
+      console.log('🔇 음성 모드 아님 - 대화 시작 중단');
+      return;
+    }
+
+    if (isSpeakingRef.current) return;
+    
+    setIsSpeaking(true);
+    isSpeakingRef.current = true;
+
+    try {
+      const formData = new FormData();
+      formData.append('menuName', menu?.name || '메뉴');
+      
+      console.log('📤 백엔드에 Toping 페이지 진입 알림');
+      const response = await fetch('/ai/chat-voice-toping', {
+        method: 'POST',
+        headers: { Accept: 'application/octet-stream' },
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error(`백엔드 응답 에러: ${response.status}`);
+      }
+
+      console.log('✅ 백엔드 응답 수신');
+
+      const audioPlayer = audioPlayerRef.current;
+      
+      audioPlayer.addEventListener('ended', () => {
+        console.log('🔊 백엔드 AI 음성 재생 완료');
+        setIsSpeaking(false);
+        isSpeakingRef.current = false;
+
+        if (voiceModeRef.current) {
+          startMicRecording();
+        }
+      }, { once: true });
+
+      await springai.voice.playAudioFormStreamingData(response, audioPlayer);
+
+    } catch (error) {
+      console.error('❌ 백엔드 통신 오류:', error);
+      setIsSpeaking(false);
+      isSpeakingRef.current = false;
+    }
+  };
+
+  const startMicRecording = () => {
+    if (!springai || !springai.voice) {
+      console.error('❌ springai.js가 로드되지 않았습니다.');
+      return;
+    }
+    
+    if (!voiceModeRef.current) {
+      console.log('🔇 음성 모드 비활성화 - 마이크 시작 중단');
+      return;
+    }
+    
+    console.log('🎤 음성 인식 마이크 시작');
+    springai.voice.initMic(handleVoice);
+    springai.voice.controlSpeakerAnimation('user-speaker', true);
+  };
+
+  const stopVoiceRecording = () => {
+    if (springai && springai.voice) {
+      if (springai.voice.mediaRecorder && springai.voice.mediaRecorder.state === 'recording') {
+        springai.voice.mediaRecorder.stop();
+      }
+      if (springai.voice.recognition) {
+        springai.voice.recognition.stop();
+      }
+      springai.voice.controlSpeakerAnimation('user-speaker', false);
+      springai.voice.controlSpeakerAnimation('ai-speaker', false);
+    }
+    window.speechSynthesis.cancel();
+  };
+
+  const handleVoice = async (mp3Blob) => {
+    springai.voice.controlSpeakerAnimation('user-speaker', false);
+    console.log('🎤 사용자 음성 수신:', mp3Blob);
+
+    if (!voiceModeRef.current) {
+      console.log('🔇 음성 모드 비활성화 - 음성 처리 중단');
+      return;
+    }
+
+    setIsSpeaking(true);
+    isSpeakingRef.current = true;
+
+    try {
+      const formData = new FormData();
+      formData.append('question', mp3Blob, 'speech.mp3');
+      formData.append('page', 'toping');
+      formData.append('menuName', menu?.name || '');
+
+      console.log('📤 백엔드로 음성 전송 중...');
+      const response = await fetch('/ai/chat-voice-one-model', {
+        method: 'POST',
+        headers: { Accept: 'application/octet-stream' },
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error(`백엔드 응답 에러: ${response.status}`);
+      }
+
+      console.log('✅ 백엔드 응답 수신');
+      
+      springai.voice.controlSpeakerAnimation('ai-speaker', true);
+
+      const audioPlayer = audioPlayerRef.current;
+      
+      audioPlayer.addEventListener('ended', () => {
+        console.log('🔊 AI 응답 음성 재생 완료');
+        springai.voice.controlSpeakerAnimation('ai-speaker', false);
+        setIsSpeaking(false);
+        isSpeakingRef.current = false;
+
+        if (voiceModeRef.current) {
+          setTimeout(() => {
+            startMicRecording();
+          }, 1000);
+        }
+      }, { once: true });
+
+      await springai.voice.playAudioFormStreamingData(response, audioPlayer);
+
+    } catch (error) {
+      console.error('❌ 음성 처리 중 에러:', error);
+      setIsSpeaking(false);
+      isSpeakingRef.current = false;
+      springai.voice.controlSpeakerAnimation('ai-speaker', false);
+    }
+  };
 
   const basePrice = menu?.price ?? 0;
   const sizeUpPrice = sizeUp ? 700 : 0;
@@ -37,27 +195,35 @@ const Toping = ({ handleAddToCart }) => {
   const optionTotal = basePrice + sizeUpPrice + shotPrice + syrupPrice + decafPrice + pearlPrice;
   const finalTotal = optionTotal * count;
 
-const addToCartAndNavigate = () => {
-  const item = {
-    ...menu,
-    count,
-    options: {
-      sizeUp: sizeUp ? { selected: true, price: 700 } : { selected: false, price: 0 },
-      shot: { count: shot, price: 500 },
-      syrupCafe: { count: syrupCafe, price: 500 },
-      syrupVanilla: { count: syrupVanilla, price: 500 },
-      syrupHazelnut: { count: syrupHazelnut, price: 500 },
-      decaf: decaf ? { selected: true, price: 500 } : { selected: false, price: 0 },
-      pearl: pearl ? { selected: true, price: 700 } : { selected: false, price: 0 },
-      coffeeTemp,
-      coffeeIce,
-      teaTemp,
-      teaIce,
-    },
+  const addToCartAndNavigate = () => {
+    stopVoiceRecording();
+    
+    const item = {
+      ...menu,
+      count,
+      options: {
+        sizeUp: sizeUp ? { selected: true, price: 700 } : { selected: false, price: 0 },
+        shot: { count: shot, price: 500 },
+        syrupCafe: { count: syrupCafe, price: 500 },
+        syrupVanilla: { count: syrupVanilla, price: 500 },
+        syrupHazelnut: { count: syrupHazelnut, price: 500 },
+        decaf: decaf ? { selected: true, price: 500 } : { selected: false, price: 0 },
+        pearl: pearl ? { selected: true, price: 700 } : { selected: false, price: 0 },
+        coffeeTemp,
+        coffeeIce,
+        teaTemp,
+        teaIce,
+      },
+    };
+    handleAddToCart(item);
+    navigate('/main');
   };
-  handleAddToCart(item);
-  navigate('/main');
-};
+
+  useEffect(() => {
+    return () => {
+      stopVoiceRecording();
+    };
+  }, []);
 
   if (!menu) {
     return <div>메뉴 정보를 불러오는 중입니다...</div>;
@@ -65,8 +231,37 @@ const addToCartAndNavigate = () => {
 
   return (
     <div className='mmaaiinn'>
+      {/* 음성 재생용 audio 태그 */}
+      <audio ref={audioPlayerRef} style={{ display: 'none' }} />
+
+      {/* springai 음성 스피커 애니메이션용 요소 (숨김) */}
+      <div style={{ display: 'none' }}>
+        <div id="user-speaker"></div>
+        <div id="ai-speaker"></div>
+      </div>
+
+      {voiceMode && (
+        <div style={{
+          position: 'fixed',
+          top: '20px',
+          right: '20px',
+          background: '#4CAF50',
+          color: 'white',
+          padding: '10px 20px',
+          borderRadius: '20px',
+          fontSize: '16px',
+          zIndex: 1000,
+          animation: 'pulse 1.5s infinite'
+        }}>
+          🎤 음성 모드 활성
+        </div>
+      )}
+
       <header className='top-title-ct'>
-        <p onClick={() => navigate('/main')}>{'<'}</p>
+        <p onClick={() => {
+          stopVoiceRecording();
+          navigate('/main');
+        }}>{'<'}</p>
         <p className="option-select">옵션 선택</p>
       </header>
 
@@ -111,7 +306,6 @@ const addToCartAndNavigate = () => {
             <button className='select-bbtn' onClick={() => setSizeUp(v => !v)}>
               {sizeUp ? '✓' : ''}
             </button>
-
           </section>
         </section>
 
