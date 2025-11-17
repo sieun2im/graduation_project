@@ -344,48 +344,79 @@ function Onboarding({ voiceMode, setVoiceMode }) {
   };
 
   // ✅ CH340 초기화 함수 (Baud Rate 설정)
-  const initCH340 = async (device, baudRate) => {
-    try {
-      console.log('⚙️ CH340 초기화 시작...');
-      
-      const requestType = 'vendor';
-      const recipient = 'device';
-      
-      // Baud Rate 계산
-      const factor = 1532620800 / baudRate;
-      const divisor = Math.floor(factor / 256);
-      const subdivisor = Math.floor(factor % 256);
-      
-      console.log('Baud Rate:', baudRate);
-      console.log('Divisor:', divisor, 'Subdivisor:', subdivisor);
-      
-      // Control Transfer로 Baud Rate 설정
-      await device.controlTransferOut({
-        requestType: requestType,
-        recipient: recipient,
-        request: 0x9a, // CH340 Set Baud Rate
-        value: 0x1312,
-        index: divisor | (subdivisor << 8)
-      });
-      
-      console.log('✅ Baud Rate 설정 완료:', baudRate);
-      
-      // 추가 초기화
-      await device.controlTransferOut({
-        requestType: requestType,
-        recipient: recipient,
-        request: 0xa1, // CH340 Init
-        value: 0,
-        index: 0
-      });
-      
-      console.log('✅ CH340 초기화 완료');
-      
-    } catch (error) {
-      console.error('❌ CH340 초기화 실패:', error);
-      throw error;
-    }
-  };
+// ✅ CH340 초기화 함수 (완전 버전)
+const initCH340 = async (device, baudRate) => {
+  try {
+    console.log('⚙️ CH340 초기화 시작...');
+    
+    const requestType = 'vendor';
+    const recipient = 'device';
+    
+    // Baud Rate 계산
+    const factor = 1532620800 / baudRate;
+    const divisor = Math.floor(factor / 256);
+    const subdivisor = Math.floor(factor % 256);
+    
+    console.log('Baud Rate:', baudRate);
+    console.log('Divisor:', divisor, 'Subdivisor:', subdivisor);
+    
+    // 1. Baud Rate 설정
+    await device.controlTransferOut({
+      requestType: requestType,
+      recipient: recipient,
+      request: 0x9a,
+      value: 0x1312,
+      index: divisor | (subdivisor << 8)
+    });
+    
+    console.log('✅ Baud Rate 설정 완료:', baudRate);
+    
+    // 2. CH340 초기화
+    await device.controlTransferOut({
+      requestType: requestType,
+      recipient: recipient,
+      request: 0xa1,
+      value: 0,
+      index: 0
+    });
+    
+    console.log('✅ CH340 기본 초기화 완료');
+    
+    // 3. ✅ DTR/RTS 신호 활성화 (중요!)
+    await device.controlTransferOut({
+      requestType: requestType,
+      recipient: recipient,
+      request: 0xa4, // Set Handshake
+      value: 0x0101, // DTR=1, RTS=1
+      index: 0
+    });
+    
+    console.log('✅ DTR/RTS 신호 활성화');
+    
+    // 4. ✅ Line Control 설정 (데이터 비트, 정지 비트, 패리티)
+    // 8N1: 8 data bits, No parity, 1 stop bit
+    await device.controlTransferOut({
+      requestType: requestType,
+      recipient: recipient,
+      request: 0x9a, // Set Line Control
+      value: 0xc3,   // 8N1
+      index: 0x0008
+    });
+    
+    console.log('✅ Line Control 설정 (8N1)');
+    
+    // 5. ✅ 대기 시간 (아두이노 재부팅 대기)
+    console.log('⏳ 아두이노 재부팅 대기 중...');
+    await new Promise(resolve => setTimeout(resolve, 2000)); // 2초 대기
+    
+    console.log('✅ CH340 완전 초기화 완료!');
+    
+  } catch (error) {
+    console.error('❌ CH340 초기화 실패:', error);
+    throw error;
+  }
+};
+
 
   // ✅ WebUSB로 아두이노 연결
   const connectArduino = async () => {
