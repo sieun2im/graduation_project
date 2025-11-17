@@ -347,73 +347,89 @@ function Onboarding({ voiceMode, setVoiceMode }) {
 // ✅ CH340 초기화 함수 (완전 버전)
 const initCH340 = async (device, baudRate) => {
   try {
-    console.log('⚙️ CH340 초기화 시작...');
+    console.log('⚙️ CH340 초기화 시작');
     
-    const requestType = 'vendor';
-    const recipient = 'device';
-    
-    // ✅ 9600 baud 고정값 사용 (가장 확실)
     const divisor = 2;
     const subdivisor = 134;
+    const index = divisor | (subdivisor << 8);
     
-    console.log('Baud Rate:', baudRate);
     console.log('Divisor:', divisor, 'Subdivisor:', subdivisor);
+    console.log('Index:', index);
     
-    // Baud Rate 설정
+    // 1. Baud Rate 설정
     await device.controlTransferOut({
-      requestType: requestType,
-      recipient: recipient,
+      requestType: 'vendor',
+      recipient: 'device',
       request: 0x9a,
       value: 0x1312,
-      index: divisor | (subdivisor << 8)
+      index: index
     });
+    console.log('✅ Baud Rate 설정');
     
-    console.log('✅ Baud Rate 설정 완료');
-    
-    // CH340 초기화
+    // 2. CH340 초기화
     await device.controlTransferOut({
-      requestType: requestType,
-      recipient: recipient,
+      requestType: 'vendor',
+      recipient: 'device',
       request: 0xa1,
       value: 0,
       index: 0
     });
+    console.log('✅ CH340 초기화');
     
-    console.log('✅ CH340 기본 초기화 완료');
-    
-    // DTR/RTS 활성화
+    // 3. DTR/RTS 활성화
     await device.controlTransferOut({
-      requestType: requestType,
-      recipient: recipient,
+      requestType: 'vendor',
+      recipient: 'device',
       request: 0xa4,
       value: 0x0101,
       index: 0
     });
+    console.log('✅ DTR/RTS 활성화');
     
-    console.log('✅ DTR/RTS 신호 활성화');
-    
-    // Line Control
+    // 4. ✅ Line Control 설정 (중요!)
     await device.controlTransferOut({
-      requestType: requestType,
-      recipient: recipient,
+      requestType: 'vendor',
+      recipient: 'device',
       request: 0x9a,
-      value: 0xc3,
+      value: 0xc3,   // 8 data bits, no parity, 1 stop bit
       index: 0x0008
     });
+    console.log('✅ Line Control 설정 (8N1)');
     
-    console.log('✅ Line Control 설정');
+    // 5. ✅ 아두이노 리셋 (DTR 토글)
+    console.log('🔄 아두이노 리셋 중...');
     
-    // 대기
-    console.log('⏳ 대기 중...');
+    // DTR OFF
+    await device.controlTransferOut({
+      requestType: 'vendor',
+      recipient: 'device',
+      request: 0xa4,
+      value: 0x0000, // DTR=0, RTS=0
+      index: 0
+    });
+    
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    // DTR ON
+    await device.controlTransferOut({
+      requestType: 'vendor',
+      recipient: 'device',
+      request: 0xa4,
+      value: 0x0101, // DTR=1, RTS=1
+      index: 0
+    });
+    
+    console.log('⏳ 아두이노 재부팅 대기 (2초)...');
     await new Promise(resolve => setTimeout(resolve, 2000));
     
-    console.log('✅ CH340 초기화 완료!');
+    console.log('✅ CH340 완전 초기화 완료!');
     
   } catch (error) {
     console.error('❌ CH340 초기화 실패:', error);
     throw error;
   }
 };
+
 
 
   // ✅ WebUSB로 아두이노 연결
