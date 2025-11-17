@@ -8,7 +8,7 @@ import orderStartAudio from '../audio/start.mp3';
 
 function Onboarding({ voiceMode, setVoiceMode }) {
   const navigate = useNavigate();
-  const [port, setPort] = useState(null);
+  const [device, setDevice] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(false);
 
@@ -16,8 +16,9 @@ function Onboarding({ voiceMode, setVoiceMode }) {
   const isSpeakingRef = useRef(false);
   const voiceEnabledRef = useRef(false);
   const voiceModeRef = useRef(voiceMode);
-  const readerRef = useRef(null);
+  const deviceRef = useRef(null);
   const audioPlayerRef = useRef(null);
+  const readingRef = useRef(false);
   
   const [userDetected, setUserDetected] = useState(false);
   const userDetectedRef = useRef(false);
@@ -157,26 +158,17 @@ function Onboarding({ voiceMode, setVoiceMode }) {
       const response = await fetch(orderStartAudio);
       const audioBlob = await response.blob();
       
-      console.log('📊 원본 파일 크기:', audioBlob.size, 'bytes');
-      console.log('📊 원본 파일 타입:', audioBlob.type);
-      
       let fileToSend = audioBlob;
       
       if (!audioBlob.type || audioBlob.type === '' || !audioBlob.type.includes('audio')) {
         console.warn('⚠️ 파일 타입이 없거나 잘못됨, audio/mpeg로 변환');
         fileToSend = new Blob([audioBlob], { type: 'audio/mpeg' });
-        console.log('📊 변환된 타입:', fileToSend.type);
       }
       
       const file = new File([fileToSend], 'order-start.mp3', { 
         type: 'audio/mpeg',
         lastModified: Date.now()
       });
-      
-      console.log('📊 전송할 파일 정보:');
-      console.log('  - 이름:', file.name);
-      console.log('  - 크기:', file.size, 'bytes');
-      console.log('  - 타입:', file.type);
 
       const formData = new FormData();
       formData.append('question', file);
@@ -250,11 +242,10 @@ function Onboarding({ voiceMode, setVoiceMode }) {
     window.speechSynthesis.cancel();
   };
 
-  // ✅ 음성 인식 결과에서 키워드 체크
   const checkKeywordAndNavigate = (recognizedText) => {
     console.log('🔍 키워드 체크:', recognizedText);
     
-    const keywords = ['포장',  '매장'];
+    const keywords = ['포장', '테이크아웃', 'take out', '매장', '먹고', 'dine in', '여기서'];
     
     const foundKeyword = keywords.some(keyword => 
       recognizedText.toLowerCase().includes(keyword.toLowerCase())
@@ -263,10 +254,8 @@ function Onboarding({ voiceMode, setVoiceMode }) {
     if (foundKeyword) {
       console.log('✅ 키워드 감지! Main 페이지로 이동합니다.');
       
-      // 음성 중지
       stopVoiceRecording();
       
-      // 1초 후 Main 페이지로 이동
       setTimeout(() => {
         navigate('/main');
       }, 1000);
@@ -280,21 +269,18 @@ function Onboarding({ voiceMode, setVoiceMode }) {
   const handleVoice = async (mp3Blob) => {
     springai.voice.controlSpeakerAnimation('user-speaker', false);
     console.log('🎤 사용자 음성 수신:', mp3Blob);
-    console.log('📊 파일 크기:', mp3Blob.size, 'bytes');
 
     if (!voiceModeRef.current) {
       console.log('🔇 음성 모드 비활성화 - 음성 처리 중단');
       return;
     }
 
-    // ✅ springai에서 인식된 텍스트 가져오기
     const recognizedText = springai.voice.lastRecognizedText || '';
     console.log('📝 인식된 텍스트:', recognizedText);
 
-    // ✅ 키워드 체크 (포장/매장)
     const shouldNavigate = checkKeywordAndNavigate(recognizedText);
     if (shouldNavigate) {
-      return; // Main 페이지로 이동하므로 백엔드 호출 안 함
+      return;
     }
 
     if (mp3Blob.size < 5000) {
@@ -357,107 +343,161 @@ function Onboarding({ voiceMode, setVoiceMode }) {
     }
   };
 
+  // ✅ WebUSB로 아두이노 연결
   const connectArduino = async () => {
     try {
-      if ('serial' in navigator) {
-        console.log('🔌 포트 선택 대기 중...');
-        const selectedPort = await navigator.serial.requestPort();
-        await selectedPort.open({ baudRate: 9600 });
-
-        setPort(selectedPort);
-        setIsConnected(true);
-        readArduinoData(selectedPort);
-
-        console.log('✅ 아두이노 연결 성공!');
-      } else {
-        alert('❌ Web Serial API를 지원하지 않는 브라우저입니다.\nChrome 브라우저를 사용해주세요.');
+      if (!('usb' in navigator)) {
+        alert('❌ WebUSB API를 지원하지 않는 브라우저입니다.\nChrome 브라우저를 사용해주세요.');
+        return;
       }
+
+      console.log('🔌 WebUSB로 아두이노 연결 시도...');
+      
+      // CH340 칩셋 필터
+      const selectedDevice = await navigator.usb.requestDevice({ 
+        filters: [
+          { vendorId: 0x1a86 }, // CH340
+          { vendorId: 0x0403 }, // FTDI
+          { vendorId: 0x10c4 }, // CP210x
+          { vendorId: 0x2341 }, // Arduino 정품
+          { vendorId: 0x2a03 }  // Arduino 정품
+        ]
+      });
+
+      console.log('✅ USB 장치 선택됨:', selectedDevice);
+      
+      // 장치 열기
+      await selectedDevice.open();
+      
+      // Configuration 선택 (대부분 1번)
+      if (selectedDevice.configuration === null) {
+        await selectedDevice.selectConfiguration(1);
+      }
+      
+      // Interface claim (CH340은 0번)
+      await selectedDevice.claimInterface(0);
+      
+      console.log('✅ 아두이노 WebUSB 연결 성공!');
+      
+      setDevice(selectedDevice);
+      deviceRef.current = selectedDevice;
+      setIsConnected(true);
+      
+      // 데이터 읽기 시작
+      readArduinoData(selectedDevice);
+
     } catch (error) {
       console.error('아두이노 연결 실패:', error);
-      alert('아두이노 연결에 실패했습니다. USB 케이블을 확인해주세요.');
+      
+      if (error.name === 'NotFoundError') {
+        alert('USB 장치를 선택하지 않았습니다.');
+      } else if (error.name === 'SecurityError') {
+        alert('USB 접근 권한이 거부되었습니다.\n페이지를 새로고침하고 다시 시도해주세요.');
+      } else {
+        alert('아두이노 연결에 실패했습니다.\n' + error.message);
+      }
     }
   };
 
   const disconnectArduino = async () => {
     try {
-      if (readerRef.current) {
-        await readerRef.current.cancel();
-        readerRef.current = null;
+      readingRef.current = false;
+      
+      if (deviceRef.current) {
+        await deviceRef.current.close();
       }
-      if (port) {
-        await port.close();
-      }
-      setPort(null);
+      
+      setDevice(null);
+      deviceRef.current = null;
       setIsConnected(false);
+      
       console.log('✅ 아두이노 연결 해제 완료');
     } catch (error) {
       console.error('아두이노 연결 해제 실패:', error);
     }
   };
 
-  const readArduinoData = async (selectedPort) => {
+  // ✅ WebUSB로 데이터 읽기
+  const readArduinoData = async (selectedDevice) => {
+    readingRef.current = true;
+    
     try {
-      const textDecoder = new TextDecoderStream();
-      selectedPort.readable.pipeTo(textDecoder.writable);
+      console.log('📡 아두이노 데이터 수신 시작...');
       
-      const reader = textDecoder.readable.getReader();
-      readerRef.current = reader;
-
-      while (true) {
-        const { value, done } = await reader.read();
-        
-        if (done) {
-          reader.releaseLock();
-          readerRef.current = null;
-          break;
-        }
-        
-        if (value) {
-          const lines = value.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+      // CH340은 endpoint 0x82 (IN), 64 bytes
+      const endpointNumber = 2; // endpoint 0x82 = 2
+      
+      while (readingRef.current && deviceRef.current) {
+        try {
+          const result = await selectedDevice.transferIn(endpointNumber, 64);
           
-          for (const data of lines) {
-            console.log('📡 수신 데이터:', data);
+          if (result.data && result.data.byteLength > 0) {
+            const decoder = new TextDecoder();
+            const text = decoder.decode(result.data);
             
-            if (data.toUpperCase().includes('USER_DETECT')) {
-              console.log(`[readArduinoData] USER_DETECTED 신호 수신`);
+            // 줄바꿈으로 분리
+            const lines = text.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+            
+            for (const data of lines) {
+              console.log('📡 수신 데이터:', data);
               
-              if (userDetectedRef.current) {
-                console.log('[readArduinoData] 이미 사용자 감지됨 - 추가 감지 무시');
-                continue;
-              }
-              
-              if (!isSpeakingRef.current && voiceEnabledRef.current) {
-                playWelcomeMessage();
-              } else {
-                console.log('[readArduinoData] 음성 재생 중이거나 음성 비활성화 상태');
+              if (data.toUpperCase().includes('USER_DETECT')) {
+                console.log(`[readArduinoData] USER_DETECTED 신호 수신`);
+                
+                if (userDetectedRef.current) {
+                  console.log('[readArduinoData] 이미 사용자 감지됨 - 추가 감지 무시');
+                  continue;
+                }
+                
+                if (!isSpeakingRef.current && voiceEnabledRef.current) {
+                  playWelcomeMessage();
+                } else {
+                  console.log('[readArduinoData] 음성 재생 중이거나 음성 비활성화 상태');
+                }
               }
             }
+          }
+        } catch (readError) {
+          if (readError.name === 'NetworkError') {
+            console.log('📡 연결 끊김, 재연결 시도...');
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          } else {
+            throw readError;
           }
         }
       }
     } catch (error) {
       console.error('📡 시리얼 읽기 중 오류:', error);
       setIsConnected(false);
+      readingRef.current = false;
     }
   };
 
   useEffect(() => {
     const autoConnect = async () => {
       try {
-        if ('serial' in navigator) {
-          const ports = await navigator.serial.getPorts();
+        if ('usb' in navigator) {
+          const devices = await navigator.usb.getDevices();
 
-          if (ports.length > 0) {
-            const selectedPort = ports[0];
-            await selectedPort.open({ baudRate: 9600 });
-            setPort(selectedPort);
+          if (devices.length > 0) {
+            const selectedDevice = devices[0];
+            
+            await selectedDevice.open();
+            if (selectedDevice.configuration === null) {
+              await selectedDevice.selectConfiguration(1);
+            }
+            await selectedDevice.claimInterface(0);
+            
+            setDevice(selectedDevice);
+            deviceRef.current = selectedDevice;
             setIsConnected(true);
-            readArduinoData(selectedPort);
+            readArduinoData(selectedDevice);
+            
             console.log('✅ 아두이노 자동 재연결 성공!');
           }
         }
       } catch (error) {
-        console.log('자동 연결 실패');
+        console.log('자동 연결 실패:', error.message);
       }
     };
 
@@ -465,8 +505,10 @@ function Onboarding({ voiceMode, setVoiceMode }) {
 
     return () => {
       stopVoiceRecording();
-      if (readerRef.current) readerRef.current.cancel().catch(console.error);
-      if (port) port.close().catch(console.error);
+      readingRef.current = false;
+      if (deviceRef.current) {
+        deviceRef.current.close().catch(console.error);
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -513,7 +555,7 @@ function Onboarding({ voiceMode, setVoiceMode }) {
         {isConnected ? (
           <div className="status-connected">
             <span className="status-dot"></span>
-            아두이노 연결됨
+            아두이노 연결됨 (WebUSB)
             {userDetected && (
               <span style={{marginLeft: '10px', color: '#4CAF50', fontSize: '14px'}}>
                 ✓ 사용자 감지됨
@@ -530,7 +572,7 @@ function Onboarding({ voiceMode, setVoiceMode }) {
           </div>
         ) : (
           <button className="connect-btn arduino-btn" onClick={connectArduino}>
-            🔌 아두이노 수동 연결
+            🔌 아두이노 수동 연결 (WebUSB)
           </button>
         )}
       </div>
