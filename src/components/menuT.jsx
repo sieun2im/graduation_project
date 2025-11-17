@@ -13,7 +13,7 @@ function Onboarding({ voiceMode, setVoiceMode }) {
   const [isConnected, setIsConnected] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(false);
 
-  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [_isSpeaking, setIsSpeaking] = useState(false);
   const isSpeakingRef = useRef(false);
   const voiceEnabledRef = useRef(false);
   const voiceModeRef = useRef(voiceMode);
