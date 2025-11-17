@@ -8,7 +8,7 @@ import orderStartAudio from '../audio/start.mp3';
 
 function Onboarding({ voiceMode, setVoiceMode }) {
   const navigate = useNavigate();
-  const [_device, setDevice] = useState(null);
+  const [device, setDevice] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(false);
 
@@ -343,6 +343,50 @@ function Onboarding({ voiceMode, setVoiceMode }) {
     }
   };
 
+  // ✅ CH340 초기화 함수 (Baud Rate 설정)
+  const initCH340 = async (device, baudRate) => {
+    try {
+      console.log('⚙️ CH340 초기화 시작...');
+      
+      const requestType = 'vendor';
+      const recipient = 'device';
+      
+      // Baud Rate 계산
+      const factor = 1532620800 / baudRate;
+      const divisor = Math.floor(factor / 256);
+      const subdivisor = Math.floor(factor % 256);
+      
+      console.log('Baud Rate:', baudRate);
+      console.log('Divisor:', divisor, 'Subdivisor:', subdivisor);
+      
+      // Control Transfer로 Baud Rate 설정
+      await device.controlTransferOut({
+        requestType: requestType,
+        recipient: recipient,
+        request: 0x9a, // CH340 Set Baud Rate
+        value: 0x1312,
+        index: divisor | (subdivisor << 8)
+      });
+      
+      console.log('✅ Baud Rate 설정 완료:', baudRate);
+      
+      // 추가 초기화
+      await device.controlTransferOut({
+        requestType: requestType,
+        recipient: recipient,
+        request: 0xa1, // CH340 Init
+        value: 0,
+        index: 0
+      });
+      
+      console.log('✅ CH340 초기화 완료');
+      
+    } catch (error) {
+      console.error('❌ CH340 초기화 실패:', error);
+      throw error;
+    }
+  };
+
   // ✅ WebUSB로 아두이노 연결
   const connectArduino = async () => {
     try {
@@ -353,7 +397,6 @@ function Onboarding({ voiceMode, setVoiceMode }) {
 
       console.log('🔌 WebUSB로 아두이노 연결 시도...');
       
-      // CH340 칩셋 필터
       const selectedDevice = await navigator.usb.requestDevice({ 
         filters: [
           { vendorId: 0x1a86 }, // CH340
@@ -365,17 +408,47 @@ function Onboarding({ voiceMode, setVoiceMode }) {
       });
 
       console.log('✅ USB 장치 선택됨:', selectedDevice);
+      console.log('장치 정보:', {
+        vendorId: '0x' + selectedDevice.vendorId.toString(16),
+        productId: '0x' + selectedDevice.productId.toString(16)
+      });
+      
+      // 장치가 이미 열려있으면 닫기
+      if (selectedDevice.opened) {
+        console.log('⚠️ 장치가 이미 열려있음, 먼저 닫기...');
+        await selectedDevice.close();
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
       
       // 장치 열기
       await selectedDevice.open();
+      console.log('✅ 장치 열기 성공');
       
-      // Configuration 선택 (대부분 1번)
+      // Configuration 선택
       if (selectedDevice.configuration === null) {
         await selectedDevice.selectConfiguration(1);
+        console.log('✅ Configuration 1 선택됨');
       }
       
-      // Interface claim (CH340은 0번)
-      await selectedDevice.claimInterface(0);
+      // Interface claim
+      let interfaceClaimed = false;
+      for (const interfaceNumber of [0, 1, 2]) {
+        try {
+          await selectedDevice.claimInterface(interfaceNumber);
+          console.log(`✅ Interface ${interfaceNumber} Claim 성공!`);
+          interfaceClaimed = true;
+          break;
+        } catch (error) {
+          console.warn(`⚠️ Interface ${interfaceNumber} Claim 실패`);
+        }
+      }
+      
+      if (!interfaceClaimed) {
+        throw new Error('Interface Claim 실패');
+      }
+      
+      // ✅ CH340 초기화 (Baud Rate 9600 설정)
+      await initCH340(selectedDevice, 9600);
       
       console.log('✅ 아두이노 WebUSB 연결 성공!');
       
@@ -387,14 +460,14 @@ function Onboarding({ voiceMode, setVoiceMode }) {
       readArduinoData(selectedDevice);
 
     } catch (error) {
-      console.error('아두이노 연결 실패:', error);
+      console.error('❌ 아두이노 연결 실패:', error);
       
       if (error.name === 'NotFoundError') {
         alert('USB 장치를 선택하지 않았습니다.');
-      } else if (error.name === 'SecurityError') {
-        alert('USB 접근 권한이 거부되었습니다.\n페이지를 새로고침하고 다시 시도해주세요.');
+      } else if (error.name === 'NetworkError') {
+        alert('USB 장치가 다른 앱에서 사용 중입니다!\n\nUSB Serial Console 앱을 완전히 종료하고 다시 시도해주세요.');
       } else {
-        alert('아두이노 연결에 실패했습니다.\n' + error.message);
+        alert('아두이노 연결 실패:\n' + error.message);
       }
     }
   };
@@ -417,46 +490,61 @@ function Onboarding({ voiceMode, setVoiceMode }) {
     }
   };
 
-  // ✅ WebUSB로 데이터 읽기
+  // ✅ WebUSB로 데이터 읽기 (수정됨)
   const readArduinoData = async (selectedDevice) => {
     readingRef.current = true;
     
     try {
       console.log('📡 아두이노 데이터 수신 시작...');
       
-      // CH340은 endpoint 0x82 (IN), 64 bytes
-      const endpointNumber = 2; // endpoint 0x82 = 2
+      const endpointNumber = 2; // CH340 IN endpoint
+      
+      // ✅ 버퍼 초기화 (부분 데이터 처리용)
+      let buffer = '';
       
       while (readingRef.current && deviceRef.current) {
         try {
           const result = await selectedDevice.transferIn(endpointNumber, 64);
           
           if (result.data && result.data.byteLength > 0) {
-            const decoder = new TextDecoder();
+            // ✅ UTF-8 디코딩
+            const decoder = new TextDecoder('utf-8');
             const text = decoder.decode(result.data);
             
-            // 줄바꿈으로 분리
-            const lines = text.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+            // ✅ 버퍼에 추가
+            buffer += text;
             
-            for (const data of lines) {
-              console.log('📡 수신 데이터:', data);
+            // ✅ 줄바꿈으로 분리
+            const lines = buffer.split('\n');
+            
+            // 마지막 불완전한 라인은 버퍼에 보관
+            buffer = lines.pop() || '';
+            
+            // 완전한 라인들만 처리
+            for (const line of lines) {
+              const data = line.replace(/\r/g, '').trim(); // \r 제거
               
-              if (data.toUpperCase().includes('USER_DETECT')) {
-                console.log(`[readArduinoData] USER_DETECTED 신호 수신`);
+              if (data.length > 0) {
+                console.log('📡 수신 데이터:', data);
                 
-                if (userDetectedRef.current) {
-                  console.log('[readArduinoData] 이미 사용자 감지됨 - 추가 감지 무시');
-                  continue;
-                }
-                
-                if (!isSpeakingRef.current && voiceEnabledRef.current) {
-                  playWelcomeMessage();
-                } else {
-                  console.log('[readArduinoData] 음성 재생 중이거나 음성 비활성화 상태');
+                if (data.toUpperCase().includes('USER_DETECT')) {
+                  console.log(`🎉 사용자 감지됨!`);
+                  
+                  if (userDetectedRef.current) {
+                    console.log('[readArduinoData] 이미 사용자 감지됨 - 추가 감지 무시');
+                    continue;
+                  }
+                  
+                  if (!isSpeakingRef.current && voiceEnabledRef.current) {
+                    playWelcomeMessage();
+                  } else {
+                    console.log('[readArduinoData] 음성 재생 중이거나 음성 비활성화 상태');
+                  }
                 }
               }
             }
           }
+          
         } catch (readError) {
           if (readError.name === 'NetworkError') {
             console.log('📡 연결 끊김, 재연결 시도...');
@@ -487,6 +575,9 @@ function Onboarding({ voiceMode, setVoiceMode }) {
               await selectedDevice.selectConfiguration(1);
             }
             await selectedDevice.claimInterface(0);
+            
+            // ✅ 자동 연결 시에도 CH340 초기화
+            await initCH340(selectedDevice, 9600);
             
             setDevice(selectedDevice);
             deviceRef.current = selectedDevice;
