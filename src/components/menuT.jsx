@@ -522,75 +522,98 @@ const initCH340 = async (device, baudRate) => {
   };
 
   // ✅ WebUSB로 데이터 읽기 (수정됨)
-  const readArduinoData = async (selectedDevice) => {
-    readingRef.current = true;
+const readArduinoData = async (selectedDevice) => {
+  readingRef.current = true;
+  
+  try {
+    console.log('📡 아두이노 데이터 수신 시작...');
     
-    try {
-      console.log('📡 아두이노 데이터 수신 시작...');
-      
-      const endpointNumber = 2; // CH340 IN endpoint
-      
-      // ✅ 버퍼 초기화 (부분 데이터 처리용)
-      let buffer = '';
-      
-      while (readingRef.current && deviceRef.current) {
-        try {
-          const result = await selectedDevice.transferIn(endpointNumber, 64);
+    // Endpoint 자동 감지
+    let workingEndpoint = 2; // 기본값
+    const endpoints = [2, 1, 0x82, 0x81];
+    
+    console.log('🔍 Endpoint 자동 감지 중...');
+    for (const ep of endpoints) {
+      try {
+        const testResult = await Promise.race([
+          selectedDevice.transferIn(ep, 64),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 500))
+        ]);
+        
+        if (testResult.data) {
+          console.log(`✅ Endpoint ${ep} 작동!`);
+          workingEndpoint = ep;
+          break;
+        }
+      } catch (error) {
+        console.log(`❌ Endpoint ${ep} 실패`);
+      }
+    }
+    
+    console.log(`📍 Endpoint ${workingEndpoint} 사용`);
+    
+    let buffer = '';
+    let loopCount = 0;
+    
+    while (readingRef.current && deviceRef.current) {
+      try {
+        loopCount++;
+        
+        if (loopCount % 10 === 0) {
+          console.log(`📊 데이터 대기 중... (${loopCount}회)`);
+        }
+        
+        const result = await Promise.race([
+          selectedDevice.transferIn(workingEndpoint, 64),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 2000))
+        ]);
+        
+        if (result.data && result.data.byteLength > 0) {
+          console.log('✅ 데이터 수신:', result.data.byteLength, 'bytes');
           
-          if (result.data && result.data.byteLength > 0) {
-            // ✅ UTF-8 디코딩
-            const decoder = new TextDecoder('utf-8');
-            const text = decoder.decode(result.data);
+          const decoder = new TextDecoder('utf-8');
+          const text = decoder.decode(result.data);
+          console.log('📝 원본:', JSON.stringify(text));
+          
+          buffer += text;
+          
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+          
+          for (const line of lines) {
+            const data = line.replace(/\r/g, '').trim();
             
-            // ✅ 버퍼에 추가
-            buffer += text;
-            
-            // ✅ 줄바꿈으로 분리
-            const lines = buffer.split('\n');
-            
-            // 마지막 불완전한 라인은 버퍼에 보관
-            buffer = lines.pop() || '';
-            
-            // 완전한 라인들만 처리
-            for (const line of lines) {
-              const data = line.replace(/\r/g, '').trim(); // \r 제거
+            if (data.length > 0) {
+              console.log('📡 수신:', data);
               
-              if (data.length > 0) {
-                console.log('📡 수신 데이터:', data);
+              if (data.includes('USER_DETECTED')) {
+                console.log('🎉 사용자 감지!');
                 
-                if (data.toUpperCase().includes('USER_DETECT')) {
-                  console.log(`🎉 사용자 감지됨!`);
-                  
-                  if (userDetectedRef.current) {
-                    console.log('[readArduinoData] 이미 사용자 감지됨 - 추가 감지 무시');
-                    continue;
-                  }
-                  
-                  if (!isSpeakingRef.current && voiceEnabledRef.current) {
-                    playWelcomeMessage();
-                  } else {
-                    console.log('[readArduinoData] 음성 재생 중이거나 음성 비활성화 상태');
-                  }
+                if (!userDetectedRef.current && voiceEnabledRef.current && !isSpeakingRef.current) {
+                  setUserDetected(true);
+                  userDetectedRef.current = true;
+                  playWelcomeMessage();
                 }
               }
             }
           }
-          
-        } catch (readError) {
-          if (readError.name === 'NetworkError') {
-            console.log('📡 연결 끊김, 재연결 시도...');
-            await new Promise(resolve => setTimeout(resolve, 1000));
-          } else {
-            throw readError;
-          }
+        }
+        
+      } catch (readError) {
+        if (readError.message !== 'Timeout') {
+          console.error('📡 오류:', readError);
         }
       }
-    } catch (error) {
-      console.error('📡 시리얼 읽기 중 오류:', error);
-      setIsConnected(false);
-      readingRef.current = false;
+      
+      await new Promise(resolve => setTimeout(resolve, 50));
     }
-  };
+  } catch (error) {
+    console.error('📡 치명적 오류:', error);
+    setIsConnected(false);
+    readingRef.current = false;
+  }
+};
+
 
   useEffect(() => {
     const autoConnect = async () => {
