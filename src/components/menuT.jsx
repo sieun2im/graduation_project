@@ -352,15 +352,14 @@ const initCH340 = async (device, baudRate) => {
     const requestType = 'vendor';
     const recipient = 'device';
     
-    // Baud Rate 계산
-    const factor = 1532620800 / baudRate;
-    const divisor = Math.floor(factor / 256);
-    const subdivisor = Math.floor(factor % 256);
+    // ✅ 9600 baud 고정값 사용 (가장 확실)
+    const divisor = 2;
+    const subdivisor = 134;
     
     console.log('Baud Rate:', baudRate);
     console.log('Divisor:', divisor, 'Subdivisor:', subdivisor);
     
-    // 1. Baud Rate 설정
+    // Baud Rate 설정
     await device.controlTransferOut({
       requestType: requestType,
       recipient: recipient,
@@ -369,9 +368,9 @@ const initCH340 = async (device, baudRate) => {
       index: divisor | (subdivisor << 8)
     });
     
-    console.log('✅ Baud Rate 설정 완료:', baudRate);
+    console.log('✅ Baud Rate 설정 완료');
     
-    // 2. CH340 초기화
+    // CH340 초기화
     await device.controlTransferOut({
       requestType: requestType,
       recipient: recipient,
@@ -382,34 +381,33 @@ const initCH340 = async (device, baudRate) => {
     
     console.log('✅ CH340 기본 초기화 완료');
     
-    // 3. ✅ DTR/RTS 신호 활성화 (중요!)
+    // DTR/RTS 활성화
     await device.controlTransferOut({
       requestType: requestType,
       recipient: recipient,
-      request: 0xa4, // Set Handshake
-      value: 0x0101, // DTR=1, RTS=1
+      request: 0xa4,
+      value: 0x0101,
       index: 0
     });
     
     console.log('✅ DTR/RTS 신호 활성화');
     
-    // 4. ✅ Line Control 설정 (데이터 비트, 정지 비트, 패리티)
-    // 8N1: 8 data bits, No parity, 1 stop bit
+    // Line Control
     await device.controlTransferOut({
       requestType: requestType,
       recipient: recipient,
-      request: 0x9a, // Set Line Control
-      value: 0xc3,   // 8N1
+      request: 0x9a,
+      value: 0xc3,
       index: 0x0008
     });
     
-    console.log('✅ Line Control 설정 (8N1)');
+    console.log('✅ Line Control 설정');
     
-    // 5. ✅ 대기 시간 (아두이노 재부팅 대기)
-    console.log('⏳ 아두이노 재부팅 대기 중...');
-    await new Promise(resolve => setTimeout(resolve, 2000)); // 2초 대기
+    // 대기
+    console.log('⏳ 대기 중...');
+    await new Promise(resolve => setTimeout(resolve, 2000));
     
-    console.log('✅ CH340 완전 초기화 완료!');
+    console.log('✅ CH340 초기화 완료!');
     
   } catch (error) {
     console.error('❌ CH340 초기화 실패:', error);
