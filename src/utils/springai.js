@@ -11,7 +11,7 @@ springai.voice.initMic = async function (handleVoice) {
   springai.voice.voice = false;
   springai.voice.chatting = false;
   springai.voice.silenceStart = null;
-  springai.voice.silenceDelay = 800;
+  springai.voice.silenceDelay = 1500;
   springai.voice.silenceThreshold = 0.06;
   springai.voice.stream = null;
   springai.voice.analyser = null;
@@ -76,11 +76,13 @@ springai.voice.initRecognitionVoice = function () {
     }
   };
   
-  recognition.onend = function () {
-    if (!springai.voice.voice) {
+recognition.onend = function () {
+  if (!springai.voice.voice && !springai.voice.chatting) {
+    setTimeout(() => {
       recognition.start();
-    }
-  };
+    }, 300); // ✅ 300ms 대기
+  }
+};
 
   console.log("음성 인식 시작");
   recognition.start();
