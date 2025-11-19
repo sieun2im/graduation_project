@@ -11,8 +11,8 @@ springai.voice.initMic = async function (handleVoice) {
   springai.voice.voice = false;
   springai.voice.chatting = false;
   springai.voice.silenceStart = null;
-  springai.voice.silenceDelay = 800;
-  springai.voice.silenceThreshold = 0.06;
+  springai.voice.silenceDelay = 1500;
+  springai.voice.silenceThreshold = 0.01;
   springai.voice.stream = null;
   springai.voice.analyser = null;
   springai.voice.mediaRecorder = null;
@@ -65,13 +65,15 @@ springai.voice.initRecognitionVoice = function () {
   recognition.lang = 'ko-KR';
   recognition.interimResults = true;
   recognition.continuous = false;
+  recognition.maxAlternatives = 1;  // ✅ 추가
 
   recognition.onstart = function () {};
   
   recognition.onresult = function (event) {
     const transcript = event.results[0][0].transcript;
+    springai.voice.lastRecognizedText = transcript;
     if (transcript.length > 0 && springai.voice.isKorean(transcript)) {
-      console.log("한국어 음성 확인");
+      console.log("한국어 음성 확인:", transcript);  // ✅ 로그 개선
       springai.voice.voice = true;
     }
   };
