@@ -164,3 +164,154 @@
         font-size: 15px;
     }
 
+
+    /* ===== 음성 인식 오버레이 ===== */
+.voice-listening-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 9998;
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+.voice-listening-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 30px;
+}
+
+/* 마이크 아이콘 */
+.microphone-icon {
+  font-size: 120px;
+  animation: pulse 1.5s ease-in-out infinite;
+  filter: drop-shadow(0 0 30px rgba(76, 175, 80, 0.8));
+}
+
+/* 펄스 애니메이션 */
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.2);
+    opacity: 0.8;
+  }
+}
+
+/* 듣고 있습니다 텍스트 */
+.listening-text {
+  font-size: 32px;
+  font-weight: 600;
+  color: white;
+  margin: 0;
+  animation: blink 1.5s ease-in-out infinite;
+}
+
+/* 깜빡임 애니메이션 */
+@keyframes blink {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
+
+/* 사운드 웨이브 */
+.sound-wave {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  height: 60px;
+}
+
+.sound-wave span {
+  width: 6px;
+  background: linear-gradient(to top, #4CAF50, #8BC34A);
+  border-radius: 3px;
+  animation: wave 1s ease-in-out infinite;
+}
+
+.sound-wave span:nth-child(1) {
+  animation-delay: 0s;
+}
+
+.sound-wave span:nth-child(2) {
+  animation-delay: 0.1s;
+}
+
+.sound-wave span:nth-child(3) {
+  animation-delay: 0.2s;
+}
+
+.sound-wave span:nth-child(4) {
+  animation-delay: 0.3s;
+}
+
+.sound-wave span:nth-child(5) {
+  animation-delay: 0.4s;
+}
+
+/* 웨이브 애니메이션 */
+@keyframes wave {
+  0%, 100% {
+    height: 20px;
+  }
+  50% {
+    height: 60px;
+  }
+}
+
+/* 페이드인 애니메이션 */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* 반응형 - 태블릿 */
+@media (max-width: 768px) {
+  .microphone-icon {
+    font-size: 100px;
+  }
+  
+  .listening-text {
+    font-size: 28px;
+  }
+  
+  .sound-wave {
+    height: 50px;
+  }
+  
+  .sound-wave span:nth-child(odd) {
+    height: 15px;
+  }
+}
+
+/* 반응형 - 모바일 */
+@media (max-width: 480px) {
+  .microphone-icon {
+    font-size: 80px;
+  }
+  
+  .listening-text {
+    font-size: 24px;
+  }
+  
+  .sound-wave {
+    height: 40px;
+  }
+}

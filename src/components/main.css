@@ -2,8 +2,8 @@
     background: linear-gradient(to bottom right, #EFF6FF, #F0F9FF, #EEF2FF);
     min-height: 100vh;
     padding-bottom: 220px; /* 주문내역 영역과 동일하게 아래에 여백 */
-    overflow-y: auto;
-    /* width:750px; */
+    overflow-x: hidden;
+    width:755px;
 }
 .main-top-sec {
     display : flex;
@@ -47,7 +47,7 @@
 .drink-total-ct {
     display: flex;
     flex-wrap: wrap;
-    width: 800px; /* 전체 영역 너비 */
+    width: 755px; /* 전체 영역 너비 */
     /* margin: 0 auto; */
 }
 
